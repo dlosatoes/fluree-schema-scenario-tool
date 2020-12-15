@@ -1,0 +1,1561 @@
+#!/usr/bin/env python3
+"""Simple script for compiling a fluree transaction init file, and for running
+    basic tests with it"""
+# pylint: disable=too-many-lines
+import os
+import re
+import copy
+import subprocess
+import webbrowser
+import sys
+import argparse
+import json
+import time
+import hashlib
+import asyncio
+import itertools
+VERSION = "0.2.6"
+CRYPTO_OK = True
+DOCKER_OK = True
+try:
+    import base58
+except ModuleNotFoundError:
+    print("WARNING: - base58 python lib not found.")
+    CRYPTO_OK = False
+try:
+    import aioflureedb
+except ModuleNotFoundError:
+    print("WARNING: - aioflureedb python lib not found.")
+    CRYPTO_OK = False
+try:
+    import bitcoinlib
+except ModuleNotFoundError:
+    print("WARNING: - bitcoinlib python lib not found.")
+    CRYPTO_OK = False
+if not CRYPTO_OK:
+    print("         - testing commands disabled.")
+try:
+    import docker
+except ModuleNotFoundError:
+    if CRYPTO_OK:
+        print("WARNING: - docker python lib not found.")
+    else:
+        print("         - docker python lib not found.")
+    print("         - docker related commands disabled.")
+    DOCKER_OK = False
+
+
+class FlushFile(object):
+    """Helper class for file like objects to always flush on write"""
+    def __init__(self, fd):
+        self.fd = fd
+
+    def write(self, x):
+        ret = self.fd.write(x)
+        self.fd.flush()
+        return ret
+
+    def writelines(self, lines):
+        ret = self.writelines(lines)
+        self.fd.flush()
+        return ret
+
+    def flush(self):
+        return self.fd.flush()
+
+    def close(self):
+        return self.fd.close()
+
+    def fileno(self):
+        return self.fd.fileno()
+
+
+sys.stdout = FlushFile(sys.stdout)  # Fix print() not always flushing when running in linux docker on a windows host
+
+
+def key_to_id(privkey):
+    """Convert a private key string into a fluree account id.
+
+    Parameters
+    ----------
+    privkey: string
+        A hexadecimal ECDSA private key.
+
+    Returns
+    -------
+    str
+        Base58 encoded adress/key-id within the FlureeDB address namespace
+
+    """
+    if privkey:
+        # Remove the bitcoin network id and the checksum from the base58 decoded bitcoin adress,
+        # then prefix with fluree network id.
+        core = b'\x0f\x02' + base58.b58decode(bitcoinlib.keys.Key(privkey).address())[1:-4]
+        # Take the sha256 of the sha256 of the decoded and patched bitcoin adress.
+        hash1 = hashlib.sha256()
+        hash2 = hashlib.sha256()
+        hash1.update(core)
+        hash2.update(hash1.digest())
+        # Use the first 4 characters as checksum, base58 encode the result.
+        keyid = base58.b58encode(core + hash2.digest()[:4]).decode()
+        return keyid
+    return None
+
+
+def query_to_clojure(obj, params):
+    """Convert a FlureeQL query to a clojure '(query (str ...) )' smart-function function body.
+
+    Parameters
+    ----------
+    obj: dict
+        Dict object containing a FlureeQL query
+    params: list
+        List of parameters to insert into clojure expression
+
+    Returns
+    -------
+    str
+        A clojure (str ) expression that builds the param substituted FlureeQL query as a string.
+
+    Raises
+    ------
+    RuntimeError
+        If PARAM count in JSON and params length don't match
+    """
+    # Serialize the query, sorted keys for deterministic substitution, no pretty printing
+    data = json.dumps(obj, sort_keys=True)
+    # Split the JSON into parts using 'PARAM' as seperator
+    parts = data.split("PARAM")
+    # Escape each JSON part by serializing as a JSON list and removing the qruare brackets
+    escaped_parts = [json.dumps([part])[1:-1] for part in parts]
+    # The amount of parts should be one more than the amount ot parameters
+    if len(parts) != len(params) + 1:
+        raise RuntimeError("Param count mismatch: " +
+                           str(len(params)) +
+                           " given " +
+                           str(len(parts) -1) +
+                           " needed ; " +
+                           data)
+    # Interleave the escaped JSON parts and the parameters and put them in a (str ) clojure
+    #  expression
+    rval = " ".join(list(itertools.chain(*zip(["(query (str "] + params, escaped_parts))) + [") )"])
+    return rval
+
+def query_to_clojure_previous(obj, params):
+    """Convert a FlureeQL query to a clojure '(query (str ...) )' smart-function function body.
+
+    Parameters
+    ----------
+    obj: dict
+        Dict object containing a FlureeQL query
+    params: list
+        List of parameters to insert into clojure expression
+
+    Returns
+    -------
+    str
+        A clojure (str ) expression that builds the param substituted FlureeQL query as a string.
+
+    Raises
+    ------
+    RuntimeError
+        If PARAM count in JSON and params length don't match
+    """
+    # Serialize the query, sorted keys for deterministic substitution, no pretty printing
+    obj["block"] = 1234567890987 #magic number
+    data = json.dumps(obj, sort_keys=True)
+    # Split the JSON into parts using 'PARAM' as seperator
+    parts = data.split("PARAM")
+    # Escape each JSON part by serializing as a JSON list and removing the qruare brackets
+    escaped_parts = [json.dumps([part])[1:-1] for part in parts]
+    # The amount of parts should be one more than the amount ot parameters
+    if len(parts) != len(params) + 1:
+        raise RuntimeError("Param count mismatch: " +
+                           str(len(params)) +
+                           " given " +
+                           str(len(parts) -1) +
+                           " needed ; " +
+                           data)
+    # Interleave the escaped JSON parts and the parameters and put them in a (str ) clojure
+    #  expression
+    rval = " ".join(list(itertools.chain(*zip(["(query (str "] + params, escaped_parts))) + [") )"])
+    # Now do the same with our magic number
+    parts = rval.split(str(obj["block"]))
+    if len(parts) != 2:
+        raise RuntimeError("Problem with block insertion query_to_clojure_previous")
+    return parts[0] + '" (query lastBlock) "' + parts[1]
+
+def expand_operation(operation, subdir, fluree_parts, verboseerrors):
+    """Expand any "code_expand" or "code+from_query" in a single operation within a transaction
+
+    Parameters
+    ----------
+    operation: dict
+        FlureeQL operation object taken from within a transaction
+    subdir: str
+        Component directory name
+    fluree_parts: str
+        Fluree build sources top dir directory path
+    verboseerrors: boolean
+        Add extra errpr message to rules that don't define them
+    Returns
+    -------
+    str
+        Potentially expanded version of the supplied operation
+    """
+    # If the operation has a "params" field, use it, otherwise use empty list.
+    params = []
+    if (verboseerrors and "_id" in operation and "id" in operation
+            and operation["_id"].startswith("_rule")
+            and "errorMessage" not in operation):
+        print("Adding verbose error for", operation["id"])
+        operation["errorMessage"] = "Verbose Errors: " + operation["id"]
+    if "params" in operation:
+        params = operation["params"]
+    if "code_expand" in operation:
+        # Read the file designated in the code_expand field
+        path = fluree_parts + "/" + subdir + "/" + operation["code_expand"]
+        with open(path) as datafile:
+            data = datafile.read()
+            data = re.sub(' +', ' ', data.replace("\n"," "))
+        if operation["code_expand"].split(".")[-1].lower() == "clj":
+            # A clojure file contains the actual "code" content
+            operation["code"] = data.rstrip()
+        else:
+            # A JSON file contains a JSON FlureeQL query that is converted to clojure code.
+            obj = json.loads(data)
+            operation["code"] = query_to_clojure(obj, params)
+        # Remove the code_expand key/value
+        del operation["code_expand"]
+    operation2 = None
+    if "code_from_query" in operation:
+        if not "block" in operation["code_from_query"] and "name" in operation and subdir != ".":
+            operation2 = copy.deepcopy(operation)
+            operation2["name"] = operation["name"] + "_previous_block"
+            if "_id" in operation2 and isinstance(operation2["_id"], str) and "$" in operation2["_id"]:
+                operation2["_id"] = operation2["_id"] + "_previous_block"
+            operation2["code"] = query_to_clojure_previous(operation2["code_from_query"], params)
+            del operation2["code_from_query"]
+        # Inlined FlureeQL JSON gets converted to clojure code.
+        operation["code"] = query_to_clojure(operation["code_from_query"], params)
+        # Remove the code_from_query key/value
+        del operation["code_from_query"]
+    return operation, operation2
+
+
+def expand_transaction(transaction, subdir, fluree_parts, verboseerrors):
+    """Expand any "code_expand" or "code+from_query" in a transaction
+
+    Parameters
+    ----------
+    transaction: list
+        FlureeQL transaction list
+    subdir: str
+        Component directory name
+    fluree_parts: str
+        Fluree build sources top dir directory path
+    verboseerrors: boolean
+        Add extra error messages to rules that don't define them.
+
+    Returns
+    -------
+    str
+        Potentially expanded version of the supplied transaction
+    """
+    rval = list()
+    for operation in transaction:
+        op1, op2 = expand_operation(operation, subdir, fluree_parts, verboseerrors)
+        rval.append(op1)
+        if isinstance(op2,dict):
+            rval.append(op2)
+    return rval
+
+
+async def filldb(host, port, dbase, key, keyid, transactions):
+    """Run a collection if thransactions against the database
+
+    Parameters
+    ----------
+    host: string
+        The FlureeDB host
+    port: int
+        The TCP port of the FlureeDB host
+    dbase: string
+        The net/db string of the database on the FlureeDB host we want to submit the
+         transactions to.
+    key: string
+        The ECDSA signing key for our transactions. This should be the host default key.
+    keyid: string
+        The key-id of the above signing key
+    transactions: list
+        A list with Fluree transactions to execute.
+
+    Raises
+    ------
+    aioflureedb.FlureeException
+        If schema transaction is invalid
+
+    """
+    # pylint: disable=too-many-arguments
+    async with  aioflureedb.FlureeClient(masterkey=key,
+                                         auth_address=keyid,
+                                         host=host,
+                                         port=port) as flureeclient:
+        await flureeclient.health.ready()
+        await flureeclient.new_db(db_id=dbase)
+        fdb = await flureeclient[dbase]
+        async with fdb(key, keyid) as database:
+            await database.ready()
+            for transaction in transactions:
+                try:
+                    await database.command.transaction(transaction)
+                except aioflureedb.FlureeException as exp:
+                    print("Exception while processing schema transaction")
+                    print(json.dumps(transaction, indent=4, sort_keys=True))
+                    print()
+                    raise exp
+
+def strip_comments_obj(operation):
+    """ Strip all "COMMENT" key key/value pairs from a dict.
+
+    Parameters
+    ----------
+    operation: dict
+        A FlureeQL operation or query
+
+    Returns
+    -------
+    dict
+        A copy of the supplied dict without any COMMENT key key/value data.
+    """
+    rval = dict()
+    for key in operation.keys():
+        if key != "COMMENT":
+            rval[key] = operation[key]
+    return rval
+
+def strip_comments_list(transaction):
+    """ Strip all "COMMENT" key key/balue pairs from a list of dicts
+
+    Parameters
+    ----------
+    transaction: list
+        A FlureeQL transaction.
+
+    Returns
+    -------
+    str
+        A copy of the supplied transaction without any COMMENT key/value data in any of the
+        operations.
+    """
+    rval = list()
+    for operation in transaction:
+        rval.append(strip_comments_obj(operation))
+    return rval
+
+
+async def do_transaction(database, rdatabase, transaction, succeed):
+    """Do a single FlureeDB transaction.
+    Parameters
+    ----------
+    database: aioflureedb._FlureeDbClient
+        Database client using a regular unpriv signing key
+    rdatabase: aioflureedb._FlureeDbClient
+        Database client using the default "root" signing key.
+    transaction: list
+        Transaction to attempt
+    succeed: bool
+        Boolean indicating if the caller "expects" the transaction to succeed or fail
+
+    Raises
+    ------
+    aioflureedb.FlureeException
+        If an unexpected exception happens in a transaction.
+    RuntimeError
+        If a transaction or query fails where it wasn't expected to or succeeds when it was
+         expected to fail.
+    """
+    # pylint: disable=too-many-branches, too-many-statements
+    try:
+        try:
+            # Transact without waiting for the result, we'll loop for that later
+            tid = await database.command.transaction(transaction, do_await=False)
+        except aioflureedb.FlureeException as exp:
+            print("Exception while processing transaction for NO transaction\n",
+                  json.dumps(transaction, indent=4, sort_keys=True))
+            raise exp
+        cont = True
+        count = 0
+        # Loop untill we know if the transaction succeeded.
+        while cont:
+            count += 1
+            try:
+                # Query if the transaction result is known using the "root" DB connection
+                status = await rdatabase.flureeql.query(select=["*"], ffrom=["_tx/id", tid])
+            except aioflureedb.FlureeException as exp:
+                print("Exception while querying for transaction state with FlureeDB default key\n",
+                      json.dumps(transaction, indent=4, sort_keys=True),
+                      "\n",
+                      tid)
+                raise exp
+            try:
+                # Do the same using the regular signing key
+                status2 = await database.flureeql.query(select=["*"], ffrom=["_tx/id", tid])
+            except aioflureedb.FlureeException as exp:
+                print("Exception while querying for transaction state with RUN-AS key.\n",
+                      json.dumps(transaction, indent=4, sort_keys=True),
+                      "\n",
+                      tid)
+                raise exp
+            if status:
+                # The transaction has completed, check what happened
+                cont = False
+                if not status2:
+                    # We didn't get a result with the regular signing key AFTER we did get one
+                    # with the root signing key.
+                    if succeed:
+                        # If we were expected to succeed, this is a hard error
+                        print("         - ERROR: User has insuficient rights for own transaction")
+                        print(json.dumps(transaction, indent=4, sort_keys=True))
+                        raise RuntimeError("Insuficient rights to read own transaction")
+                    # If we were expected to fail, this still is something we need to warn about.
+                    # Its probably good to allow any key to at least read its own transaction
+                    # results.
+                    print("         - WARNING: User has insuficient rights to read own transaction")
+                    print(json.dumps(transaction, indent=4, sort_keys=True))
+                if "error" in status[0]:
+                    # First type of error
+                    if succeed:
+                        # Raise exception if we were expected to succeed.
+                        print("         - ERROR: Unexpected error in YES transaction\n",
+                              json.dumps(transaction, indent=4, sort_keys=True),
+                              "\n",
+                              status)
+                        raise RuntimeError("Unexpected error in YES transaction")
+                    # This was an expected error
+                    print("         - NOTICE: Expected error in NO transaction\n",
+                          "                 :", status[0]["error"])
+                elif "_tx/error" in status[0]:
+                    # Second type of error
+                    if succeed:
+                        # Raise exception if we were expected to succeed.
+                        print("         - ERROR: Unexpected error in YES transaction\n",
+                              json.dumps(transaction, indent=4, sort_keys=True),
+                              "\n",
+                              status)
+                        raise RuntimeError("Unexpected error in YES transaction")
+                    # This was an expected error
+                    print("         - NOTICE: Expected error in NO transaction\n",
+                          "                 :", status[0]["_tx/error"])
+                elif not succeed:
+                    # Raise an exception if the transaction was suposed to fail.
+                    print("       - ERROR  : No error from no transaction\n",
+                          json.dumps(transaction, indent=4, sort_keys=True),
+                          "\n",
+                          status)
+                    raise RuntimeError("No error returned from NO transaction")
+            else:
+                # Log to console every 10 attempts of trying to check if transaction is done.
+                if not count % 10:
+                    print("     - waiting for transaction to finish")
+                # Sleep for 100 msec before checking again
+                await asyncio.sleep(0.1)
+    except aioflureedb.FlureeException as exp:
+        # We either succeeded or failed unexpectedly
+        if succeed:
+            # Log failing transaction on exception.
+            print("Exception while processing transaction\n",
+                  json.dumps(transaction, indent=4, sort_keys=True))
+            raise exp
+        print("        - Expected exception")
+
+
+async def do_query(database, query, succeed):
+    """Perform a Fluree query on the database.
+
+
+    Parameters
+    ----------
+    database: aioflureedb._FlureeDbClient
+        Database client using a regular unpriv signing ke
+    query: dict
+        FlureeQL query to attempt
+    succeed: bool
+        Boolean indicating if the caller "expects" the query to succeed or fail
+
+    Raises
+    ------
+    RuntimeError
+        Empty response to yes or non-empty reaponse to no query
+    aioflureedb.FlureeException
+        Exception was thrown by aioflureedb lib while performing query
+    """
+    # Exceptions in queries are never OK, query should return empty results on failure.
+    try:
+        response0 = await database.flureeql.query.raw(query)
+    except aioflureedb.FlureeException as exp:
+        print("Exception while processing query")
+        print(json.dumps(query, indent=4, sort_keys=True))
+        print()
+        raise exp
+    # Strip all _id only values  from the response
+    response = list()
+    for obj in response0:
+        if "_id" in obj:
+            del obj["_id"]
+        if obj:
+            response.append(obj)
+    if response0 and not response:
+        print("        - NOTE: Non-empty response treated as functionally empty (only _id fields)")
+    # On success we expect a non-empty result
+    if succeed and len(response) == 0:
+        print("Empty response on YES query")
+        print(json.dumps(query, indent=4, sort_keys=True))
+        raise RuntimeError("Empty response to YES query.")
+    # On failure we expect an empty result
+    if not succeed and response:
+        print("Non-empty response on NO query")
+        print(json.dumps(query, indent=4, sort_keys=True))
+        print(json.dumps(response, indent=4, sort_keys=True))
+        raise RuntimeError("Non-empty response to NO query.")
+
+
+async def process_fluree_testfile(database,
+                                  subdir,
+                                  fluree_parts,
+                                  fdb,
+                                  transactionfile,
+                                  succeed=True,
+                                  keys=None,
+                                  query=False):
+    # pylint: disable=too-many-locals, too-many-arguments
+    """Process a single query or transaction file from a test scenario directory
+
+    Parameters
+    ----------
+    database: aioflureedb._FlureeDbClient
+        FlureeQL DB Client using the priviledged "root" default signing key.
+    subdir: string
+        Test scenario subdir name
+    fluree_parts: string
+        Fluree build sources top dir directory path
+    fdb: aioflureedb.FlureeClient
+        Fluree Client for operations not linked to any particular database,
+         such as database creation.
+    transactionfile: str
+        The file in the subdir we need to process.
+    succeed: bool
+        Boolean indicating if the transactions/queries in the file ar expected to succeed.
+    keys: list,str,None
+        List of key objects or a single key object containing the signing key and key id for running
+        the transactions or queries with.
+    query: bool
+        Boolean indicating the file contains queries instead of transactions.
+
+    Raises
+    ------
+    RuntimeError
+        Problems with user.json content
+    """
+    basename = os.path.basename(transactionfile)
+    print("   -", basename)
+    # Read the file if it exists and fill a list of transactions/queries we should perform
+    #  from its content.
+    transactions = []
+    if os.path.isfile(transactionfile):
+        with open(transactionfile) as tfile:
+            transactions = json.load(tfile)
+    else:
+        print("      - file not found, skipping:", basename)
+    # The keys parameter is either a list of keys matching the list of transactions/queries,
+    #  its a single key that should get used for all transaction/queries, or it is None.
+    #  Normalize keys to the list variant.
+    if not isinstance(keys, list):
+        key = keys
+        keys = []
+        for transaction in transactions:
+            keys.append(key)
+    if len(keys) == len(transactions):
+        # If keys has the proper length, everyting is irie and we process all queries/transactions
+        for index, transaction in enumerate(transactions):
+            key = keys[index]
+            if key is None:
+                # Strip transactions of any "COMMENT" fields.
+                transaction = strip_comments_list(transaction)
+                # If the key is None, this is probably the prepare or the cleanup file,
+                #  run the transaction using the
+                #  priviledged signing key
+                await do_transaction(database, database, transaction, succeed)
+            else:
+                # Use the non-priv signing key for most operations
+                async with fdb(key["private"], key["account-id"]) as database2:
+                    if query:
+                        # Strip all queries of any "COMMENT" fields.
+                        transaction = strip_comments_obj(transaction)
+                        # Run the query with the non-priv signing key
+                        await do_query(database2, transaction, succeed)
+                    else:
+                        # Strip transactions of any "COMMENT" fields.
+                        transaction = strip_comments_list(transaction)
+                        # Run the transaction using the priviledged signing key, use the priv
+                        #  signing key for transaction probing.
+                        await do_transaction(database2, database, transaction, succeed)
+
+        print("      - Ran", len(transactions), " database ", ("transactions", "queries")[query])
+    else:
+        print("      - ERROR: Wrong number of keys defined in user.json.")
+        raise RuntimeError("Too many keys defined in user.json")
+
+
+async def run_test_scenario(database, subdir, fluree_parts, fdb, scenario):
+    """Run a single full test scenario
+
+    Parameters
+    ----------
+    database: aioflureedb._FlureeDbClient
+        FlureeQL DB Client using the priviledged "root" default signing key.
+    subdir: string
+        Test scenario subdir name
+    fluree_parts: string
+        Fluree build sources top dir directory path
+    fdb: aioflureedb.FlureeClient
+        Fluree Client for operations not linked to any particular database,
+         such as database creation.
+    scenario: str
+        Name of the scenario sub-subdir
+    """
+    # pylint: disable=too-many-branches,too-many-arguments
+    print("  - SCENARIO:", scenario)
+    testdir = fluree_parts + "/" + subdir + "/" + scenario + "/"
+    # Process the user.json file, this file contains the signing keys used in the scenario
+    #  and designates what
+    # signing key is used for what part of the test scenario.
+    with open(testdir + "user.json") as userfile:
+        users = json.load(userfile)
+    yeskeys = []
+    tyeskeys = []
+    nokeys = []
+    tnokeys = []
+    if "yes" in users:
+        if isinstance(users["yes"], list):
+            for idx in users["yes"]:
+                yeskeys.append(users["keys"][idx])
+        else:
+            yeskeys = users["keys"][users["yes"]]
+    if "no" in users:
+        if isinstance(users["no"], list):
+            for idx in users["no"]:
+                nokeys.append(users["keys"][idx])
+        else:
+            nokeys = users["keys"][users["no"]]
+    if "tyes" in users:
+        if isinstance(users["tyes"], list):
+            for idx in users["tyes"]:
+                tyeskeys.append(users["keys"][idx])
+        else:
+            tyeskeys = users["keys"][users["tyes"]]
+    if "tno" in users:
+        if isinstance(users["tno"], list):
+            for idx in users["tno"]:
+                tnokeys.append(users["keys"][idx])
+        else:
+            tnokeys = users["keys"][users["tno"]]
+    # Process the rest of the files of the test scenario.
+    #
+    # Prepare transactions, these should at least create the users and give them the
+    #  apropriate roles
+    await process_fluree_testfile(database, subdir, fluree_parts, fdb, testdir + "prepare.json")
+    # Run all yes queries, these should succeed with non empty results.
+    await process_fluree_testfile(database, subdir, fluree_parts, fdb, testdir + "yes.json",
+                                  keys=yeskeys, query=True)
+    # Run all no queries, these should fail with empty results.
+    await process_fluree_testfile(database, subdir, fluree_parts, fdb, testdir + "no.json",
+                                  succeed=False, keys=nokeys, query=True)
+    # Run all yes transactions, these should succeed without exceptions
+    await process_fluree_testfile(database, subdir, fluree_parts, fdb,
+                                  testdir + "tyes.json", keys=tyeskeys)
+    # Run all no transactions, these should fail with exceptions from aioflureedb
+    await process_fluree_testfile(database, subdir, fluree_parts, fdb,
+                                  testdir + "tno.json", succeed=False, keys=tnokeys)
+    # Run cleanup transactions
+    await process_fluree_testfile(database, subdir, fluree_parts, fdb, testdir + "clean")
+
+
+async def smartfunction_test(host, port, dbase, key, keyid, subdir, transactions, fluree_parts):
+    """Create a test database, initialize database with transactions up to stage and run all
+       tests for stage.
+
+    Parameters
+    ----------
+    host: string
+        The FlureeDB host
+    port: int
+        The TCP port of the FlureeDB host
+    dbase: string
+        The net/db string of the database on the FlureeDB host we want to submit the
+        transactions to.
+    key: string
+        The ECDSA signing key for our transactions. This should be the host default key.
+    keyid: string
+        The key-id of the above signing key
+    subdir: string
+        The subdir name of the stage the tests are being ran for.
+    transactions: list
+        All transactions from the first till the current stage to run prior to test runs.
+    fluree_parts:
+        Fluree build sources top dir directory path
+
+
+    Raises
+    ------
+    aioflureedb.FlureeException
+        Exception from aioflureedb library in transaction
+    """
+    # pylint: disable=too-many-locals, too-many-arguments
+    # Fluree host context, using priviledged (root role) default key.
+    async with  aioflureedb.FlureeClient(masterkey=key, auth_address=keyid, host=host,
+                                         port=port) as flureeclient:
+        await flureeclient.health.ready()
+        # Create the new database for our tests
+        await flureeclient.new_db(db_id=dbase)
+        fdb = await flureeclient[dbase]
+        # Database context
+        async with fdb(key, keyid) as database:
+            await database.ready()
+            # Run all the transactions in preparation to the tests
+            print(" - processing schema transaction sub-set")
+            for transaction in transactions:
+                try:
+                    await database.command.transaction(transaction)
+                except aioflureedb.FlureeException as exp:
+                    print("Exception while processing schema transaction")
+                    print(json.dumps(transaction, indent=4, sort_keys=True))
+                    print()
+                    raise exp
+            print(" - ok, completed", len(transactions), "transactions on", dbase)
+            # Read the test scenario config file for this stage.
+            with open(fluree_parts + "/" + subdir + "/test.json") as testscenariosfile:
+                testscenarios = json.load(testscenariosfile)
+            print(" - running test scenarios")
+            # Run all test scenarios.
+            for scenario in testscenarios:
+                await run_test_scenario(database, subdir, fluree_parts, fdb, scenario)
+            print(" -", len(testscenarios), "tests completed")
+
+
+async def fluree_main(notest, network, host, port, output, createkey, createid,
+                      target, fluree_parts, verboseerrors):
+    # pylint: disable=too-many-branches, too-many-statements
+    # TODO: We may want to dismantle this function and refactor. Below is a remnant
+    #       of the 0.1 version of fsst that didn't yet use subcommands.
+    """The tools main function
+
+    Parameters
+    ----------
+    notest: boolean
+        Boolean indicating not to run tests, but to still deploy compiled transactions to db
+    network: string
+        Fluree network name for all databases to create and test with.
+    host: string
+        The FlureeDB host
+    port: int
+        The TCP port of the FlureeDB host
+    output: string
+        File path for output artifact
+    createkey: string
+        The ECDSA signing key for our transactions. This should be the host default key.
+    createid: string
+        The key-id of the above signing key
+    target:
+        The build target name to use.
+    fluree_parts: string
+        Fluree build sources top dir directory path
+    verboseerrors: boolean
+        Add extra error strings to rules if undefined.
+    """
+    # pylint: disable=too-many-locals,too-many-arguments
+    maxblock = [expand_operation({
+        "_id": "_fn$lastblock",
+        "name" : "lastBlock",
+        "doc" : "Get the number of the last known block on the ledger",
+        "code_from_query": {
+           "select": "?maxBlock",
+           "where": [
+               ["?s", "_block/number", "?bNum"],
+               ["?maxBlock",  "#(max ?bNum)"],
+               ["?s", "_block/number", "?maxBlock"]
+           ]
+        }
+    },".",fluree_parts,False)[0]]
+    try:
+        expanded = list()
+        expanded.append(maxblock)
+        # Build.json contains the different build targets and lists their components.
+        # Fetch the specified target from this file.
+        try:
+            with open(fluree_parts + "/build.json") as buildfile:
+                build = json.load(buildfile)
+                if target in build:
+                    build = build[target]
+                else:
+                    print("ERROR: No target '" + target + "' in build.json")
+                    sys.exit(2)
+        except FileNotFoundError:
+            print("ERROR: No build.json in", fluree_parts, "dir.")
+            print("       Use --dir option to specify alternative build dir")
+            return
+        maxstage = 0
+        # Outer loop for finding out where and how far to run the inner loop.
+        # pylint: disable=too-many-nested-blocks
+        testcount = 0
+        for subdir in build:
+            if output or notest:
+                # If output or notest, we dont run any tests, we just fill the expanded list
+                #  with expanded transactions.
+                main = fluree_parts + "/" + subdir + "/main.json"
+                noexpand = fluree_parts + "/" + subdir + ".json"
+                if os.path.isfile(noexpand):
+                    with open(noexpand) as nefile:
+                        nelist = json.load(nefile)
+                    for transaction in nelist:
+                        out_transaction = list()
+                        for operation in transaction:
+                            if (verboseerrors and "_id" in operation and "id" in operation
+                                    and operation["_id"].startswith("_rule")
+                                    and "errorMessage" not in operation):
+                                print("Adding verbose error for", operation["id"])
+                                operation["errorMessage"] = "Verbose Errors: " + operation["id"]
+                            out_transaction.append(operation)
+                        expanded.append(out_transaction)
+                else:
+                    with open(main) as mainfile:
+                        mainlist = json.load(mainfile)
+                    for entry in mainlist:
+                        expanded.append(expand_transaction(entry,
+                                                           subdir,
+                                                           fluree_parts,
+                                                           verboseerrors))
+            else:
+                # Otherwise, if notest is false and the stage has a test.json,
+                #  we run our inner loop for testing
+                testfile = fluree_parts + "/" + subdir + "/test.json"
+                if os.path.isfile(testfile) and not notest:
+                    testcount += 1
+                    # Make up a database name for our test, using network and stage name.
+                    database = network + "/" + subdir
+                    database = "-".join(database.lower().split("_"))
+                    expanded2 = list()
+                    expanded2.append(maxblock)
+                    print("- Database:", database)
+                    print(" - collecting transactions from build subdirs")
+                    # Run the test with transactions from all stages up to this one.
+                    print("Going through first", maxstage, "stages")
+                    for subdir2 in build[:maxstage+1]:
+                        print("  -", subdir2)
+                        main = fluree_parts + "/" + subdir2 + "/main.json"
+                        noexpand = fluree_parts + "/" + subdir2 + ".json"
+                        if os.path.isfile(noexpand):
+                            with open(noexpand) as nefile:
+                                nelist = json.load(nefile)
+                            for transaction in nelist:
+                                transaction_out = list()
+                                for operation in transaction:
+                                    if (verboseerrors and "_id" in operation and "id" in operation
+                                            and operation["_id"].startswith("_rule")
+                                            and "errorMessage" not in operation):
+                                        print("       + Adding verbose error for", operation["id"])
+                                        operation["errorMessage"] = "Verbose Errors: " + \
+                                                                    operation["id"]
+                                    transaction_out.append(operation)
+                                expanded2.append(transaction_out)
+                        else:
+                            with open(main) as mainfile:
+                                mainlist = json.load(mainfile)
+                            for entry in mainlist:
+                                expanded2.append(expand_transaction(entry,
+                                                                    subdir2,
+                                                                    fluree_parts,
+                                                                    verboseerrors))
+                    # Run all test scenarios for this stage
+                    await smartfunction_test(host,
+                                             port,
+                                             database,
+                                             createkey,
+                                             createid,
+                                             build[maxstage],
+                                             expanded2,
+                                             fluree_parts)
+            maxstage += 1
+        if output:
+            # Write the expanded transaction list for all stages combined to a single artifact.
+            with open(output, "w") as opf:
+                opf.write(json.dumps(expanded, indent=4))
+        elif notest:
+            # If no output but notest specified, fill the database with the expanded tranactions
+            # list.
+            database = network + "/" + target
+            database = "-".join(database.lower().split("_"))
+            await filldb(host, port, database, createkey, createid, expanded)
+            print("Deployed", fluree_parts, "target", target, "to", database, "on", host)
+        elif testcount == 0:
+            print("WARNING: build target has no tests defined")
+    except (RuntimeError, aioflureedb.FlureeException) as exp:
+        # For a more friendly fail
+        print(str(exp))
+        sys.exit(1)
+
+def get_running_docker(client, tag):
+    """Get the running docker"""
+    name = "pibara/fsst:" + tag
+    for container in client.containers.list():
+        for ttag in  container.image.attrs["RepoTags"]:
+            if ttag == name:
+                return container
+    return None
+
+def get_container_info(container):
+    """Get host port and create key from docker"""
+    hostport = None
+    createkey = None
+    if ("HostConfig" in container.attrs and
+            "PortBindings" in container.attrs["HostConfig"] and
+            "8080/tcp" in container.attrs["HostConfig"]["PortBindings"]):
+        for binding in container.attrs["HostConfig"]["PortBindings"]["8080/tcp"]:
+            if "HostPort" in binding:
+                hostport = binding["HostPort"]
+    command_result = container.exec_run("cat default-private-key.txt")
+    if command_result.exit_code == 0:
+        createkey = command_result.output.decode()
+    return hostport, createkey
+
+def get_from_docker(tag):
+    """Retreive the host port and the createkey from a running fsst docker image"""
+    client = docker.from_env()
+    container = get_running_docker(client, tag)
+    if not container:
+        print("ERROR: Running docker with tag", tag, "not found")
+        sys.exit(1)
+    hostport, createkey = get_container_info(container)
+    return hostport, createkey
+
+def run_in_docker(tag, command, directory, daemonize, expose):
+    """Run a given command in a new docker container"""
+    # pylint: disable=too-many-locals
+    print("COMMAND:", command)
+    match = None
+    lookfor = "pibara/fsst:" + tag
+    print("IMAGE:", lookfor)
+    client = docker.from_env()
+    for image in client.images.list():
+        for repotag in image.attrs["RepoTags"]:
+            if repotag == lookfor:
+                match = image
+    if match is None:
+        print("ERROR: ", lookfor, "docker image not found")
+        sys.exit(0)
+    workdir = os.path.join(os.getcwd(), directory)
+    if not os.path.isdir(workdir):
+        print("ERROR:", workdir, "isn't a valid directory path")
+        sys.exit(1)
+    mount = docker.types.Mount("/usr/src/fsst/fluree_parts", workdir, read_only=True, type="bind")
+    ports = dict()
+    name = "fsst-guestcommand-" + tag
+    if expose or daemonize:
+        ports["8080/tcp"] = 8090
+    try:
+        container = client.containers.run(match, command, mounts=[mount], ports=ports, detach=True, auto_remove=True, name=name)
+    except docker.errors.APIError as exp:
+        print("ERROR: Problem starting docker container OR issue binding to 8090")
+        print(exp)
+        sys.exit(1)
+    try:
+        browser_triggered = False
+        runcmd = container.logs(stream=True, follow=True)
+        if daemonize:
+            print("Starting fluree, waiting for fluree to initialize before daemonizing")
+            print("Browser should start up, shortly")
+        for line in runcmd:
+            sline = line.decode().replace("\r", "").replace("\n", "")
+            if not daemonize:
+                print(sline, flush=True)
+            if sline == "LINGER == True" and browser_triggered is False:
+                webbrowser.open("http://localhost:8090/")
+                browser_triggered = True
+                if daemonize:
+                    runcmd.close()
+                    break
+    except KeyboardInterrupt:
+        print("Stopping container")
+        container.stop()
+        print("Container stopped after keyboard interrupt")
+
+async def get_createkey_and_port(createkey, keyfile, dockerfind, port, startfluree, verbosefluree):
+    """Get the create-key and fluree port using the relevant commandline info"""
+    # pylint: disable=too-many-arguments
+    if startfluree:
+        rval = None
+        command = ["/bin/bash", "/usr/src/fsst/fluree_start.sh"]
+        if not verbosefluree:
+            subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.Popen(command)
+        times = 0
+        while not rval:
+            try:
+                with open("./default-private-key.txt") as kfile:
+                    rval = kfile.read()
+            except FileNotFoundError:
+                print("# waiting for default-private-key.txt to appear")
+            await asyncio.sleep(6)
+            times += 1
+            if times > 40:
+                print("ERROR: Taking too long for default-private-key.txt to apear in docker")
+                print("       container after starting FlureeDB")
+                sys.exit(1)
+        print("Started FlureeDB and got createkey from newly created keyfile")
+        return rval, port, key_to_id(rval)
+    if createkey:
+        print("Using --createkey and --port values", )
+        return createkey, port, key_to_id(createkey)
+    if keyfile:
+        print("Using --keyfile and --port values")
+        with open(keyfile) as kfil:
+            createkey = kfil.read().replace("\r", "").replace("\n", "")
+            return createkey, port, key_to_id(createkey)
+    if dockerfind:
+        print("Fetching createkey and port from running image:", dockerfind)
+        hostport, createkey = get_from_docker(dockerfind)
+        return createkey, hostport, key_to_id(createkey)
+    print("ERROR: No way specfied to find default signing key for FlureeDB")
+    print("       Use one of the following command line options:")
+    print("")
+    print("         --createkey")
+    print("         --keyfile")
+    print("         --dockerfind")
+    sys.exit(1)
+
+def runs_in_docker():
+    """Check if we are running inside of docker"""
+    try:
+        with open("/proc/1/cgroup") as cgrp:
+            # Read the cgroup file if on Linux
+            cgrplines = cgrp.read().split("\n")[:-1]
+            # Count the occurences of "/", should only be one or two when in docker.
+            cnt = [line.split(":")[2] for line in cgrplines].count("/")
+        if cnt < 3:
+            return True
+    except FileNotFoundError:
+        pass
+    return False
+
+async def artifact_main(output, directory, target, verbose_errors):
+    """Main function for the artifact sub command"""
+    await fluree_main(notest=False,
+                      network=None,
+                      host=None,
+                      port=None,
+                      output=output,
+                      createkey=None,
+                      createid=None,
+                      target=target,
+                      fluree_parts=directory,
+                      verboseerrors=verbose_errors)
+    return
+
+async def test_main(directory, target, verboseerrors, host, port, network, createkey, createid):
+    """Main function for the test subcommand"""
+    # pylint: disable=too-many-arguments
+    await fluree_main(notest=False,
+                      network=network,
+                      host=host,
+                      port=port,
+                      output=None,
+                      createkey=createkey,
+                      createid=createid,
+                      target=target,
+                      fluree_parts=directory,
+                      verboseerrors=verboseerrors)
+    return
+
+async def deploy_main(directory, target, verboseerrors, host, port, network, createkey, createid):
+    """Main function for the deploy subcommand"""
+    # pylint: disable=too-many-arguments
+    await fluree_main(notest=True,
+                      network=network,
+                      host=host,
+                      port=port,
+                      output=None,
+                      createkey=createkey,
+                      createid=createid,
+                      target=target,
+                      fluree_parts=directory,
+                      verboseerrors=verboseerrors)
+    return
+
+async def dockertest_main(directory, target, verboseerrors, network, tag, verbosefluree, linger):
+    """Main function for the dockertest subcommand"""
+    # pylint: disable=too-many-arguments
+    cmd = "./fsst guesttest --target " + target + " --network " + network
+    if verboseerrors:
+        cmd += " --verboseerrors"
+    if verbosefluree:
+        cmd += " --verbosefluree"
+    if linger:
+        cmd += " --linger"
+    return run_in_docker(tag, cmd, directory, False, linger)
+
+async def dockerstart_main(tag):
+    """Main function for the dockerstart subcommand"""
+    imagename = "pibara/fsst:" + tag
+    command = "/bin/bash /usr/src/fsst/fluree_start.sh"
+    ports = dict()
+    ports["8080/tcp"] = 8090
+    client = docker.from_env()
+    name = "fsst-dockerstart-" + tag
+    try:
+        client.containers.run(imagename, command, ports=ports, detach=True, auto_remove=True, name=name)
+        print("Started", imagename)
+    except docker.errors.NotFound:
+        print("ERROR:", imagename, "not found")
+    return
+
+async def dockerstop_main(tag):
+    """Main function for the dockerstop subcommand"""
+    lookfor = "pibara/fsst:" + tag
+    client = docker.from_env()
+    container = get_running_docker(client, tag)
+    if container:
+        container.stop()
+        print("Stopping", lookfor)
+    else:
+        print("ERROR: no running instance of", lookfor, "found")
+
+async def versioncheck_main(tag):
+    """Main function for the versioncheck subcommand"""
+    # pylint: disable=too-many-branches
+    match = None
+    lookfor = "pibara/fsst:" + tag
+    client = docker.from_env()
+    for image in client.images.list():
+        for repotag in image.attrs["RepoTags"]:
+            if repotag == lookfor:
+                match = image
+    if match is None:
+        print("ERROR: ", lookfor, "docker image not found")
+        sys.exit(0)
+    cmd = "./fsst version"
+    name = "fsst-versioncheck-" + tag
+    try:
+        container = client.containers.run(match, cmd, detach=False, auto_remove=True, name=name)
+    except docker.errors.ContainerError:
+        print("ERROR: Container Error.")
+        print("       This might be the result of a 0.1.x version of the docker container")
+        print("       that didn't support --version yet")
+        sys.exit(1)
+    dockerfsstversion = None
+    for line in container.decode().split("\n"):
+        parts = line.split(":")
+        if len(parts) == 2 and parts[0] == "FSST VERSION":
+            dockerfsstversion = parts[1].replace(" ", "")
+            dockerfsst = dockerfsstversion.split(".")
+    if not dockerfsstversion:
+        print("ERROR: No valid response to --version from fsst in docker.")
+        print("       This might be the result of a 0.1.x version of the docker container")
+        print("       that didn't support --version yet")
+        sys.exit(1)
+    localfsst = VERSION.split(".")
+    if dockerfsst[0] == localfsst[0]:
+        if dockerfsst[1] == localfsst[1]:
+            if dockerfsst[2] == localfsst[2]:
+                print("Perfect version match:", VERSION, "for image", lookfor)
+            else:
+                print("Near version match:", VERSION, "local vs", dockerfsstversion,
+                      "in docker image", lookfor, ". Should be OK.")
+        else:
+            print("NOTICE: Possible version mismatch:", VERSION, "local vs", dockerfsstversion,
+                  "in docker image", lookfor, "Use with care.")
+    else:
+        print("WARNING: Version mismatch:", VERSION, "local vs", parts[1], "in docker image",
+              lookfor)
+        sys.exit(1)
+    return
+
+
+async def dockerdeploy_main(directory, target, verboseerrors, dbase, tag, verbosefluree, daemonize):
+    """Main function for the dockerdeploy subcommand"""
+    # pylint: disable=too-many-arguments
+    cmd = "./fsst guestdeploy " + dbase + " --target " + target + \
+            " --linger"
+    if verboseerrors:
+        cmd += " --verboseerrors"
+    if verbosefluree or not daemonize:
+        cmd += " --verbosefluree"
+    return run_in_docker(tag, cmd, directory, daemonize, True)
+
+async def guesttest_main(target, verboseerrors, network, linger, createkey, createid):
+    """Main function for the guesttest subcommand"""
+    # pylint: disable=too-many-arguments
+    await fluree_main(notest=False,
+                      network=network,
+                      host="localhost",
+                      port=8080,
+                      output=None,
+                      createkey=createkey,
+                      createid=createid,
+                      target=target,
+                      fluree_parts="fluree_parts",
+                      verboseerrors=verboseerrors)
+    if linger:
+        print("LINGER == True")
+        count = 0
+        while True:
+            await asyncio.sleep(30)
+            count += 1
+            print('LINGER', count, flush=True)
+    return
+
+async def artifactdeploy_main(inputfile, dbase, host, port, createkey, keyid):
+    # pylint: disable=too-many-arguments
+    """Main function for the artifactdeploy subcommand"""
+    try:
+        with open(inputfile) as artifactfile:
+            artifactdata = artifactfile.read()
+        artifact = json.loads(artifactdata)
+    except FileNotFoundError:
+        print("ERROR: couldn't open file:", inputfile)
+        sys.exit(1)
+    except json.decoder.JSONDecodeError:
+        print("ERROR: Not a JSON file:", inputfile)
+        sys.exit(1)
+    if not isinstance(artifact, list):
+        print("ERROR: Artifact file should contain a JSON array:", inputfile)
+        sys.exit(1)
+    for transaction in artifact:
+        if not isinstance(transaction, list):
+            print("ERROR: Artifact file should contain a JSON array of arrays:", inputfile)
+            sys.exit(1)
+        for operation in transaction:
+            if not isinstance(operation, dict):
+                print("ERROR: Artifact file should contain a JSON array of arrays of dicts:",
+                      inputfile)
+                sys.exit(1)
+    async with  aioflureedb.FlureeClient(masterkey=createkey,
+                                         auth_address=keyid,
+                                         host=host,
+                                         port=port) as flureeclient:
+        await flureeclient.health.ready()
+        # Create the new database for our tests
+        try:
+            await flureeclient.new_db(db_id=dbase)
+        except aioflureedb.FlureeHttpError as exp:
+            print("ERROR: Problem creating the database for deploy")
+            print("      ", json.loads(exp.args[0])["message"])
+            sys.exit(1)
+        fdb = await flureeclient[dbase]
+        # Database context
+        async with fdb(createkey, keyid) as database:
+            await database.ready()
+            for transaction in artifact:
+                try:
+                    await database.command.transaction(transaction)
+                except aioflureedb.FlureeException:
+                    print("Exception while processing artifact transaction")
+                    print(json.dumps(transaction, indent=4, sort_keys=True))
+                    print()
+                    sys.exit(1)
+    print("Deployed", inputfile, "to", dbase, "on", host)
+    return
+
+async def dockerparams_main(tag):
+    """Main function for the dockerparams subcommand"""
+    client = docker.from_env()
+    container = get_running_docker(client, tag)
+    if container is None:
+        print("ERROR, running container not found for tag =", tag)
+        return
+    echo = container.exec_run("cat default-private-key.txt")
+    createkey = None
+    port = None
+    if echo.exit_code == 0:
+        createkey = echo.output.decode()
+    if ("HostConfig" in container.attrs and
+            "PortBindings" in container.attrs["HostConfig"] and
+            "8080/tcp" in container.attrs["HostConfig"]["PortBindings"] and
+            container.attrs["HostConfig"]["PortBindings"]["8080/tcp"]):
+        for binding in container.attrs["HostConfig"]["PortBindings"]["8080/tcp"]:
+            if "HostPort" in binding:
+                port = int(binding["HostPort"])
+    print("IMAGE:", tag)
+    print("CREATEKEY:", createkey)
+    print("PORT:", port)
+
+async def guestdeploy_main(target, verboseerrors, dbase, createkey, createid):
+    """Main function for the guestdeploy subcommand"""
+    await fluree_main(notest=True,
+                      network=None,
+                      host=None,
+                      port=None,
+                      output="artifact.json",
+                      createkey=None,
+                      createid=None,
+                      target=target,
+                      fluree_parts="fluree_parts",
+                      verboseerrors=verboseerrors)
+    await artifactdeploy_main("artifact.json", dbase, "localhost", 8080, createkey, createid)
+    print("LINGER == True")
+    count = 0
+    while True:
+        await asyncio.sleep(30)
+        count += 1
+        print('LINGER', count, flush=True)
+
+async def argparse_main():
+    # pylint: disable=too-many-statements,too-many-branches,too-many-locals
+    """The main for the argparse subcommand"""
+    netname = "test" + str(int(time.time()/10) % 100000)
+    parsers = dict()
+    parsers["main"] = argparse.ArgumentParser()
+    subparsers = parsers["main"].add_subparsers()
+    # pylint: disable=line-too-long
+    helps = {
+        "artifact": "From a build target, create a single JSON artifact file with all transactions",
+        "test": "Run tests for build target using a running FlureeDB",
+        "dockertest": "Run tests for build target on a to be spawned docker containing FlureeDB",
+        "deploy": "Deploy a build target to a running FlureeDB",
+        "dockerdeploy": "Start a docker container, deploy build target, and keep container running",
+        "guesttest": "DON'T USE, INTERNAL USE ONLY",
+        "guestdeploy": "DON'T USE, INTERNAL USE ONLY",
+        "dockerparams": "Fetch createkey and port from RUNNING fsst docker container",
+        "artifactdeploy": "Deploy an artifact that was created with 'fsst artifact' earlier",
+        "versioncheck": "Validate that the version of fsst invoked and the one inside of the docker image match",
+        "version": "Get the version of the fsst tool",
+        "dockerstart": "Start a flureeDB only instance of the fsst docker image, available on localhost:8090",
+        "dockerstop": "Stop any running instance of the fsst docker image with the given tag",
+        "dir": "Directory containing build tree (default fluree_parts)",
+        "target": "FlureeDB, build target as defined in build.json ('default' if undefined)",
+        "verboseerrors": "Add verbose errors to rules without an error defined.",
+        "host": "FlureeDB host. (default localhost)",
+        "port": "FlureeDB port. (default 8080)",
+        "network": "FlureeDB network name. (generate if unspecified)",
+        "createkey": "FlureeDB signing key for creation (alternative for --keyfile or --dockerfind)",
+        "keyfile": "File containing FlureeDB signing key for creation (alternative for --createkey or --dockerfind)",
+        "dockerfind": "Extract FlureeDB signing key for creation from running docker (alternative for --createkey or --keyfile)",
+        "linger": "Keep docker/FlureeDB running after tests have completed",
+        "tag": "Tag to use for fsst docker image.",
+        "verbosefluree": "Dont redirect flureedb stdout/stderr to /dev/null",
+        "daemonize": "Run docker/FlureeDB docker as a daemon process",
+        "output": "Output JSON file",
+        "input": "Input JSON file",
+        "db": "Name for the new database to deploy to."
+    }
+    # pylint: enable=line-too-long
+    defaults = {
+        "dir" : "fluree_parts",
+        "target" : "default",
+        "verboseerrors": False,
+        "host" : "localhost",
+        "port" : "8080",
+        "network" : netname,
+        "createkey" : None,
+        "keyfile" : None,
+        "dockerfind" : "beta",
+        "linger": False,
+        "tag": "beta",
+        "verbosefluree": False,
+        "daemonize": False
+    }
+    argsmap = {
+        "artifact": {"output", "dir", "target", "verboseerrors"},
+        "test": {
+            "dir",
+            "target",
+            "verboseerrors",
+            "host",
+            "port",
+            "network",
+            "createkey",
+            "keyfile",
+            "dockerfind"
+        },
+        "deploy": {
+            "dir",
+            "target",
+            "verboseerrors",
+            "host",
+            "port",
+            "network",
+            "createkey",
+            "keyfile",
+            "dockerfind"
+        },
+        "dockertest": {"dir",
+                       "target",
+                       "verboseerrors",
+                       "network",
+                       "linger",
+                       "tag",
+                       "verbosefluree"},
+        "dockerdeploy": {"db", "dir", "target", "verboseerrors", "tag", "daemonize"},
+        "dockerparams": {"tag"},
+        "artifactdeploy": {"input:db", "host", "port", "createkey", "keyfile", "dockerfind"},
+        "guesttest": {"target", "verboseerrors", "network", "keyfile", "linger", "verbosefluree"},
+        "guestdeploy": {"db", "target", "verboseerrors", "keyfile", "linger", "verbosefluree"},
+        "versioncheck": {"tag"},
+        "dockerstart": {"tag"},
+        "dockerstop": {"tag"},
+        "version": {}
+    }
+    if CRYPTO_OK:
+        if DOCKER_OK:
+            if runs_in_docker():
+                subcommands = ["artifact",
+                               "test",
+                               "deploy",
+                               "dockertest",
+                               "dockerdeploy",
+                               "guesttest",
+                               "guestdeploy",
+                               "version"]
+            else:
+                subcommands = ["artifact",
+                               "test",
+                               "deploy",
+                               "dockertest",
+                               "dockerdeploy",
+                               "dockerparams",
+                               "artifactdeploy",
+                               "version",
+                               "versioncheck",
+                               "dockerstart",
+                               "dockerstop"]
+        else:
+            if runs_in_docker():
+                subcommands = ["artifact",
+                               "test",
+                               "deploy",
+                               "guesttest",
+                               "guestdeploy",
+                               "version"]
+            else:
+                subcommands = ["artifact",
+                               "test",
+                               "deploy",
+                               "version"]
+    else:
+        subcommands = ["artifact"]
+    for subcommand in subcommands:
+        sc_help = helps[subcommand]
+        sc_args = argsmap[subcommand]
+        parsers[subcommand] = subparsers.add_parser(subcommand, help=sc_help)
+        parsers[subcommand].add_argument('--subcommand', help=argparse.SUPPRESS, default=subcommand)
+        todo = {
+            "dir",
+            "target",
+            "verboseerrors",
+            "host",
+            "port",
+            "network",
+            "createkey",
+            "keyfile",
+            "dockerfind",
+            "linger",
+            "tag",
+            "verbosefluree",
+            "output",
+            "input",
+            "db",
+            "daemonize"
+        }
+        for sc_arg in sc_args:
+            for subarg in sc_arg.split(":"):
+                sa_help = helps[subarg]
+                if subarg in defaults:
+                    sa_default = defaults[subarg]
+                    if not sa_default is None and not sa_default:
+                        parsers[subcommand].add_argument('--' + subarg,
+                                                         action='store_true',
+                                                         help=sa_help)
+                    else:
+                        parsers[subcommand].add_argument("--" + subarg,
+                                                         help=sa_help,
+                                                         default=sa_default)
+                else:
+                    parsers[subcommand].add_argument(subarg, help=sa_help)
+                todo.remove(subarg)
+        for subarg in todo:
+            parsers[subcommand].add_argument('--' + subarg, help=argparse.SUPPRESS, default=None)
+    args = parsers["main"].parse_args()
+    if not vars(args):
+        print("Please supply commandline agruments. Use --help for info")
+        sys.exit(1)
+    if args.subcommand == "artifact":
+        return await artifact_main(args.output, args.dir, args.target, args.verboseerrors)
+    createkey = args.createkey
+    port = args.port
+    if args.subcommand in ["test", "deploy", "guesttest", "guestdeploy", "artifactdeploy"]:
+        startfluree = bool(args.subcommand in ["guesttest", "guestdeploy"])
+        createkey, port, createid = await get_createkey_and_port(args.createkey,
+                                                                 args.keyfile,
+                                                                 args.dockerfind,
+                                                                 args.port,
+                                                                 startfluree,
+                                                                 args.verbosefluree)
+    if args.subcommand == "test":
+        await test_main(args.dir,
+                        args.target,
+                        args.verboseerrors,
+                        args.host,
+                        port,
+                        args.network,
+                        createkey,
+                        createid)
+    elif args.subcommand == "deploy":
+        await deploy_main(args.dir,
+                          args.target,
+                          args.verboseerrors,
+                          args.host,
+                          port, args.network,
+                          createkey,
+                          createid)
+    elif args.subcommand == "dockertest":
+        await dockertest_main(args.dir,
+                              args.target,
+                              args.verboseerrors,
+                              args.network,
+                              args.tag,
+                              args.verbosefluree,
+                              args.linger)
+    elif args.subcommand == "dockerdeploy":
+        await dockerdeploy_main(args.dir,
+                                args.target,
+                                args.verboseerrors,
+                                args.db,
+                                args.tag,
+                                args.verbosefluree,
+                                args.daemonize)
+    elif args.subcommand == "guesttest":
+        await guesttest_main(args.target,
+                             args.verboseerrors,
+                             args.network,
+                             args.linger,
+                             createkey,
+                             createid)
+    elif args.subcommand == "guestdeploy":
+        await guestdeploy_main(args.target, args.verboseerrors, args.db, createkey, createid)
+    elif args.subcommand == "artifactdeploy":
+        await artifactdeploy_main(args.input, args.db, args.host, port, createkey, createid)
+    elif args.subcommand == "dockerparams":
+        await dockerparams_main(args.tag)
+    elif args.subcommand == "version":
+        print("FSST VERSION:", VERSION)
+    elif args.subcommand == "versioncheck":
+        await versioncheck_main(args.tag)
+    elif args.subcommand == "dockerstart":
+        await dockerstart_main(args.tag)
+    elif args.subcommand == "dockerstop":
+        await dockerstop_main(args.tag)
+    else:
+        print("ERROR: impossible subcommand:", args.subcommand)
+
+LOOP = asyncio.get_event_loop()
+LOOP.run_until_complete(argparse_main())

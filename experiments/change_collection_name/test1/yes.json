@@ -1,0 +1,14 @@
+[
+  {
+    "select": [
+      {"car": ["car/license"] }
+    ],
+    "from": "person"
+  },
+  {
+      "select": [
+        "*"
+      ],
+    "from": "car"
+  }
+]

@@ -1,0 +1,16 @@
+{
+   "keys" : [
+      {
+         "account-id" : "TeyTH5RdmweiWzrkEzwc5vYnPwqZDSh8Ng6",
+         "private" : "bb19048fbfc8f6a7f02b336048fa8e5aba1fb87f55893d40ff1ba375b90a8398"
+      },
+      {
+         "account-id" : "Tf5p2VyQgYJQ6p8suVkX633BD4kQgsp29FC",
+         "private" : "b11648b8f45a2cae682cbc549c35b065dff32794562b0765874e911e31163469"
+      }
+   ],
+   "no" : 0,
+   "yes" : 0,
+   "tno": 0,
+   "tyes": 0
+}

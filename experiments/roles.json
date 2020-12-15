@@ -1,0 +1,112 @@
+[
+  [
+    {
+      "_id": "_rule$Query_tx",
+      "id": "Query_tx",
+      "doc": "Can query _tx.",
+      "collection": "_tx",      
+      "collectionDefault": true,
+      "fns": [["_fn/name", "true"]],
+      "ops": ["query"]
+    },
+    {
+      "_id": "_role",
+      "id": "ok_tx",
+      "rules": ["_rule$Query_tx"]
+    }
+  ],
+  [
+    {
+      "_id": "_rule$Query_auth",
+      "id": "Query_auth",
+      "doc": "Can query _auth.",
+      "collection": "_auth",      
+      "collectionDefault": true,
+      "fns": [["_fn/name", "true"]],
+      "ops": ["query"]
+    },
+    {
+      "_id": "_role",
+      "id": "ok_auth",
+      "rules": ["_rule$Query_auth"]
+    }
+  ],
+  [
+    {
+      "_id": "_rule$No_Query_auth",
+      "id": "No_Query_auth",
+      "doc": "Can't query _auth.",
+      "collection": "_auth",
+      "collectionDefault": true,
+      "fns": [["_fn/name", "false"]],
+      "ops": ["query"]
+    },
+    {
+      "_id": "_role",
+      "id": "not_ok_auth",
+      "rules": ["_rule$No_Query_auth"]
+    }
+  ],
+  [
+ 
+
+    {
+      "_id": "_rule$No_Query_auth_doc",
+      "id": "No_Query_auth_doc",
+      "doc": "Can't query _auth/doc",
+      "collection": "_auth",
+      "predicates" : ["_auth/doc"],
+      "fns": [["_fn/name", "false"]],
+      "ops": ["all"]
+    },
+    {
+      "_id": "_role",
+      "id": "not_ok_auth_doc",
+      "rules": ["_rule$No_Query_auth_doc"]
+    }
+
+
+  ],
+  [
+    {
+      "_id": "_rule$Transact_auth_ext",
+      "id": "Transact_auth_ext",
+      "doc": "Can Transact _auth.",
+      "collection": "_auth",      
+      "collectionDefault": true,
+      "fns": [["_fn/name", "true"]],
+      "ops": ["transact"]
+    },   
+    {
+      "_id": "_role",
+      "id": "ok_auth_transact_external_tx",
+      "rules": ["_rule$Transact_auth_ext"]
+    }
+  ],
+  [
+    {
+      "_id": "_rule$Transact_auth_int",
+      "id": "Transact_auth_int",
+      "doc": "Can Transact _auth.",
+      "collection": "_auth",      
+      "collectionDefault": true,
+      "fns": [["_fn/name", "true"]],
+      "ops": ["transact"]
+    },
+    {
+      "_id": "_rule$TQuery_tx",
+      "id": "TQuery_tx",
+      "doc": "TCan query _tx.",
+      "collection": "_tx",      
+      "collectionDefault": true,
+      "fns": [["_fn/name", "true"]],
+      "ops": ["query"]
+    },
+    {
+      "_id": "_role",
+      "id": "ok_auth_transact_internal_tx",
+      "rules": ["_rule$Transact_auth_int","_rule$TQuery_tx"]
+    }
+  ]
+]
+

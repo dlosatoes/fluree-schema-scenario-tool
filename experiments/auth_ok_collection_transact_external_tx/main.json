@@ -1,0 +1,11 @@
+[
+  [
+    {
+      "_id": ["_auth/id", "TeyTH5RdmweiWzrkEzwc5vYnPwqZDSh8Ng6"],
+      "roles": [
+        ["_role/id", "ok_auth_transact_external_tx"],
+        ["_role/id", "ok_tx"]           
+      ]
+    }
+  ]
+]

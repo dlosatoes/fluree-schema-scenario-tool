@@ -1,0 +1,7 @@
+[
+    {
+       "select": ["doc"],
+       "from": "_auth"
+    }
+  ]
+  

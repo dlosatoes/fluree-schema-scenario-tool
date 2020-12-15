@@ -1,0 +1,6 @@
+[
+  {
+     "select": ["id"],
+     "from": "_auth"
+  }
+]

@@ -1,0 +1,65 @@
+{
+  "default": [
+    "roles",
+    "user"
+  ],
+  "user_ok": [
+    "roles",
+    "user",
+    "user_ok_collection"
+  ],
+  "user_not_ok": [
+    "roles",
+    "user",
+    "user_not_ok_collection"
+  ],
+  "user_both": [
+    "roles",
+    "user",    
+    "user_both_roles_collection"
+  ],
+  "auth_ok": [
+    "roles",
+    "user",
+    "auth_ok_collection"
+  ],
+  "auth_not_ok": [
+    "roles",
+    "user",
+    "auth_not_ok_collection"
+  ],
+  "auth_both": [
+    "roles",
+    "user",
+    "auth_both_roles_collection"
+  ],
+  "auth_ok_pred": [
+    "roles",
+    "user",
+    "auth_ok_collection_pred"
+  ],
+  "auth_not_ok_pred": [
+    "roles",
+    "user",
+    "auth_not_ok_collection_pred"
+  ],
+  "auth_both_pred": [
+    "roles",
+    "user",
+    "auth_both_collection_pred"
+  ],
+  "auth_ok_transact_internal_tx": [
+    "roles",
+    "user",    
+    "auth_ok_collection_transact_internal_tx"
+  ],
+  "auth_ok_transact_external_tx": [
+    "roles",
+    "user",    
+    "auth_ok_collection_transact_external_tx"
+  ],
+  "change_collection_name": [
+    "change_collection_name"
+  ]
+}
+

@@ -1,0 +1,26 @@
+[
+  [{
+    "name" : "roleCount",
+    "code_from_query" : {
+      "select": ["(count ?auth)"],
+      "where":[
+        ["?roles", "_role/id", "PARAM"],
+        ["?auth", "_auth/roles", "?roles"]
+      ]
+    },
+    "doc" : "Retrieve count for a specific role",
+    "_id" : "_fn$roleCount",
+    "params" : ["myRole"]
+  }],
+  [{
+    "name" : "roleAssignedHeadOfState?",
+    "code" : "(<= (nth (roleCount \"headofstate\") 0) 1)",
+    "_id" : "_fn$roleAssignedHeadOfState",
+    "doc" : "Is the role HeadOfState Assigned to 0 or 1 Auths?"
+  }],
+  [{
+    "specDoc" : "HeadOfState is already assigned to an Auth",
+    "spec" : [["_fn/name", "roleAssignedHeadOfState?"]],
+    "_id" : ["_predicate/name", "_auth/roles"]
+  }]
+]

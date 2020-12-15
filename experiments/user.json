@@ -1,0 +1,17 @@
+[
+  [
+    {
+      "_id": "_auth$theonlyone",
+      "doc": "_auth of the only user.",
+      "id": "TeyTH5RdmweiWzrkEzwc5vYnPwqZDSh8Ng6",
+      "roles": []
+    },
+    {
+      "_id": "_user",
+      "username": "test_user",
+      "auth": ["_auth$theonlyone"],
+      "doc": "the user",
+      "roles": []
+    }
+  ]
+]

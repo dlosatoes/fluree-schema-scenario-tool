@@ -1,0 +1,87 @@
+[
+
+
+  [{
+    "_id": "_collection",
+    "name": "person",
+    "doc": "A collection to hold all the people in our ledger",
+    "version": 1 
+   },
+   {
+    "_id": "_collection",
+    "name": "car",
+     "doc": "A collection to hold all the cars in our ledger",
+    "version": 1 
+   },
+   {
+    "_id": "_predicate",
+    "name": "person/car",
+    "type": "ref",
+    "multi": true,
+    "restrictCollection": "car"
+  },
+  {
+    "_id": "_predicate",
+    "name": "person/name",
+    "type": "string"
+  },
+  {
+    "_id": "_predicate",
+    "name": "car/license",
+    "type": "string",
+    "unique" : true
+  }
+],
+
+
+[
+  {
+    "_id":    "car",
+    "license": "aa1234"
+  },
+  {
+    "_id":    "car",
+    "license": "rr1234"
+  },
+  {
+    "_id":    "car",
+    "license": "zz1234"
+  }
+
+],
+
+
+[
+  {
+    "_id":    "person",
+    "name": "piet",
+    "car": [
+      ["car/license", "aa1234"]
+    ]
+  },
+  {
+    "_id":    "person",
+    "name": "jan",
+    "car": [
+      ["car/license", "rr1234"]
+    ]
+  },
+  {
+    "_id":    "person",
+    "name": "sjaak",
+    "car": [
+      ["car/license", "zz1234"]
+    ]
+  }
+]
+
+
+
+
+
+
+
+
+
+
+]

@@ -1,0 +1,34 @@
+[
+    [
+        {
+            "_id": [
+                "person/naam",
+                "sjaak"
+            ],
+            "_action": "delete"
+        },
+        {
+            "_id": [
+                "person/naam",
+                "sjaak"
+            ],
+            "naam": "sjaak2"
+        }
+    ],
+    [
+        {
+            "_id": [
+                "person/naam",
+                "sjaak"
+            ],
+            "naam": "sjaak2"
+        },
+        {
+            "_id": [
+                "person/naam",
+                "sjaak"
+            ],
+            "_action": "delete"
+        }
+    ]
+]
