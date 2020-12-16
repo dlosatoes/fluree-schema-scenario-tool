@@ -1,0 +1,24 @@
+default:
+  - stage1:
+    stage2:
+      depends_on:
+        - stage1
+    stage3:
+      depends_on:
+        - stage2
+  - stage1b:
+      depends_on:
+        - stage1
+    stage2:
+      version: 2
+    stage3:
+      depends_on:
+        - stage1b
+        - stage2
+  - stage4:
+      depends_on: 
+        -stage3
+      defer_tests:
+        - stage2
+        - stage3
+
