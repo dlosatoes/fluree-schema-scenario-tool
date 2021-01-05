@@ -14,7 +14,7 @@ The freezepart subcommand will:
 * Create a new zero-transactions main-XXXXXX.json file.
 * If needed, migrate from a single-file build-part to a directory build-part.
 
-The artifact command has one positional argument.
+The freezepart command has one positional argument.
 
 * part: The name of the build-part to freeze.
 
