@@ -1,0 +1,7 @@
+default:
+  - stage1: 1
+    stage2: 1
+    stage3: 1
+  - stage1b: 1
+    stage2: 2
+  - stage4: 1

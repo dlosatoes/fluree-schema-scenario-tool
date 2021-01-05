@@ -1,0 +1,98 @@
+default:
+  - roles:
+      order: 1
+    user:
+      order: 2
+
+user_ok:
+  - roles:
+      order: 1
+    user:
+      order: 2
+    user_ok_collection:
+      order: 3
+
+user_not_ok:
+  - roles:
+      order: 1
+    user:
+      order: 2
+    user_not_ok_collection:
+      order: 3
+
+user_both:
+  - roles:
+      order: 1
+    user:
+      order: 2    
+    user_both_roles_collection:
+      order: 3
+
+auth_ok:
+  - roles:
+      order: 1
+    user:
+      order: 2
+    auth_ok_collection:
+      order: 3
+
+auth_not_ok:
+  - roles:
+      order: 1
+    user:
+      order: 2
+    auth_not_ok_collection:
+      order: 3
+
+auth_both:
+  - roles:
+      order: 1
+  - user:
+      order: 2
+  - auth_both_roles_collection:
+      order: 3
+
+auth_ok_pred:
+  - roles:
+      order: 1
+    user:
+      order: 2
+    auth_ok_collection_pred:
+      order: 3
+
+auth_not_ok_pred:
+  - roles:
+      order: 1
+    user:
+      order: 2
+    auth_not_ok_collection_pred:
+      order: 3
+
+auth_both_pred:
+  - roles:
+      order: 1
+    user:
+      order: 2
+    auth_both_collection_pred:
+      order: 3
+
+auth_ok_transact_internal_tx:
+  - roles:
+      order: 1
+    user:    
+      order: 2
+    auth_ok_collection_transact_internal_tx:
+      order: 3
+
+auth_ok_transact_external_tx:
+  - roles:
+      order: 1
+    user:
+      order: 2
+    auth_ok_collection_transact_external_tx:
+      order: 3
+
+change_collection_name:
+  - change_collection_name:
+      order: 1
+

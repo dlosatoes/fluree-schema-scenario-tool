@@ -1,0 +1,6 @@
+default:
+  - roles:
+      order: 1
+    there_can_be_only_one:
+      order: 2
+

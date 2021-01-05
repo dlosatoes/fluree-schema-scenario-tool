@@ -14,7 +14,7 @@
   }],
   [{
     "name" : "roleAssignedHeadOfState?",
-    "code" : "(<= (nth (roleCount \"headofstate\") 0) 1)",
+    "code_expand" : "roleAssignedHeadOfState.clj",
     "_id" : "_fn$roleAssignedHeadOfState",
     "doc" : "Is the role HeadOfState Assigned to 0 or 1 Auths?"
   }],

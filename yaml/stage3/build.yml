@@ -1,0 +1,6 @@
+default:
+  - depends_on:
+    - stage2
+  - depends_on:
+    - stage1b
+    - stage2

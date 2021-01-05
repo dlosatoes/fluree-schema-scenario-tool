@@ -1,0 +1,541 @@
+#!/usr/bin/env python3
+"""Simple script for compiling a fluree transaction init file, and for running
+    basic tests with it"""
+# pylint: disable=too-many-lines
+import fsst
+import sys
+import argparse
+import asyncio
+import itertools
+import time
+CRYPTO_OK = True
+DOCKER_OK = True
+try:
+    import base58
+except ModuleNotFoundError:
+    print("WARNING: - base58 python lib not found.")
+    CRYPTO_OK = False
+try:
+    import aioflureedb
+except ModuleNotFoundError:
+    print("WARNING: - aioflureedb python lib not found.")
+    CRYPTO_OK = False
+try:
+    import bitcoinlib
+except ModuleNotFoundError:
+    print("WARNING: - bitcoinlib python lib not found.")
+    CRYPTO_OK = False
+if not CRYPTO_OK:
+    print("         - testing commands disabled.")
+try:
+    import docker
+except ModuleNotFoundError:
+    if CRYPTO_OK:
+        print("WARNING: - docker python lib not found.")
+    else:
+        print("         - docker python lib not found.")
+    print("         - docker related commands disabled.")
+    DOCKER_OK = False
+
+
+class FlushFile(object):
+    """Helper class for file like objects to always flush on write"""
+    def __init__(self, fd):
+        self.fd = fd
+
+    def write(self, x):
+        ret = self.fd.write(x)
+        self.fd.flush()
+        return ret
+
+    def writelines(self, lines):
+        ret = self.writelines(lines)
+        self.fd.flush()
+        return ret
+
+    def flush(self):
+        return self.fd.flush()
+
+    def close(self):
+        return self.fd.close()
+
+    def fileno(self):
+        return self.fd.fileno()
+
+
+sys.stdout = FlushFile(sys.stdout)  # Fix print() not always flushing when running in linux docker on a windows host
+
+def runs_in_docker():
+    """Check if we are running inside of docker"""
+    try:
+        with open("/proc/1/cgroup") as cgrp:
+            # Read the cgroup file if on Linux
+            cgrplines = cgrp.read().split("\n")[:-1]
+            # Count the occurences of "/", should only be one or two when in docker.
+            cnt = [line.split(":")[2] for line in cgrplines].count("/")
+        if cnt < 3:
+            return True
+    except FileNotFoundError:
+        pass
+    return False
+
+async def argparse_main():
+    # pylint: disable=too-many-statements,too-many-branches,too-many-locals
+    """The main for the argparse subcommand"""
+    netname = "test" + str(int(time.time()/10) % 100000)
+    parsers = dict()
+    parsers["main"] = argparse.ArgumentParser()
+    subparsers = parsers["main"].add_subparsers()
+    # pylint: disable=line-too-long
+    helps = {
+        "artifact": "From a build target, create a single JSON artifact file with all transactions",
+        "test": "Run tests for build target using a running FlureeDB",
+        "dockertest": "Run tests for build target on a to be spawned docker containing FlureeDB",
+        "deploy": "Deploy a build target to a running FlureeDB",
+        "dockerdeploy": "Start a docker container, deploy build target, and keep container running",
+        "guesttest": "DON'T USE, INTERNAL USE ONLY",
+        "guestdeploy": "DON'T USE, INTERNAL USE ONLY",
+        "dockerparams": "Fetch createkey and port from RUNNING fsst docker container",
+        "artifactdeploy": "Deploy an artifact that was created with 'fsst artifact' earlier",
+        "versioncheck": "Validate that the version of fsst invoked and the one inside of the docker image match",
+        "version": "Get the version of the fsst tool",
+        "dockerstart": "Start a flureeDB only instance of the fsst docker image, available on localhost:8090",
+        "dockerstop": "Stop any running instance of the fsst docker image with the given tag",
+        "freezepart": "Freeze a given build-part and its dependencies and create an empty new version.",
+        "checkpart": "Check the integrity of the frozen components of a build-part",
+        "unfreezedeps": "Unfreeze the dependencies of a build-part; use with care.",
+        "refreezedeps": "Refreeze the unfrozen dependencies of a build-part.",
+        "freezetarget": "Freeze a build target and create a new empty future version.",
+        "artifactupgrade": "Do a smart upgrade using database stored upgrade info.",
+        "dir": "Directory containing build tree (default fluree_parts)",
+        "target": "FlureeDB, build target as defined in build.json ('default' if undefined)",
+        "verboseerrors": "Add verbose errors to rules without an error defined.",
+        "host": "FlureeDB host. (default localhost)",
+        "port": "FlureeDB port. (default 8080)",
+        "network": "FlureeDB network name. (generate if unspecified)",
+        "createkey": "FlureeDB signing key for creation (alternative for --keyfile or --dockerfind)",
+        "keyfile": "File containing FlureeDB signing key for creation (alternative for --createkey or --dockerfind)",
+        "dockerfind": "Extract FlureeDB signing key for creation from running docker (alternative for --createkey or --keyfile)",
+        "linger": "Keep docker/FlureeDB running after tests have completed",
+        "tag": "Tag to use for fsst docker image.",
+        "verbosefluree": "Dont redirect flureedb stdout/stderr to /dev/null",
+        "daemonize": "Run docker/FlureeDB docker as a daemon process",
+        "output": "Output directory or JSON file.",
+        "input": "Input JSON file",
+        "db": "Name for the new database to deploy to.",
+        "verbosebuildfile": "Don't use the diff-only version of the build.yml format, be verbose.",
+        "beta": "Build the latest 'non-frozen' version defined in build.yml (instead of the latest frozen version)",
+        "targetversion": "Specify a specific version to build",
+        "nondeploy": "Make a one big file artifact or deployment containing the transactions for all versions.",
+        "allversions": "Make an artifact file for each version upto the latest version defined for this build",
+        "upgrade": "Start depoyment assuming the database contains the designated version of the build-target",
+        "artifactdir": "The directory containing the artifact file(s).",
+        "part": "Name of the part to (un)-freeze.",
+        "persistent": "Host directory to use for persistent storage for FlureeDB",
+        "usepersistent": "Use guest mounted persistent host storage"
+    }
+    # pylint: enable=line-too-long
+    defaults = {
+        "dir" : "fluree_parts",
+        "target" : "default",
+        "verboseerrors": False,
+        "host" : "localhost",
+        "port" : "8080",
+        "network" : netname,
+        "createkey" : None,
+        "keyfile" : None,
+        "dockerfind" : "beta",
+        "linger": False,
+        "tag": "beta",
+        "verbosefluree": False,
+        "daemonize": False,
+        "verbosebuildfile": False,
+        "beta": False,
+        "targetversion": None,
+        "nondeploy": False,
+        "allversions": False,
+        "targetversion": None,
+        "upgrade": None,
+        "artifactdir": "artifacts",
+        "persistent": None,
+        "usepersistent": False
+    }
+    argsmap = {
+        "artifact": {
+            "output",
+            "dir",
+            "target",
+            "verboseerrors",
+            "beta",
+            "targetversion",
+            "nondeploy",
+            "allversions"
+        },
+        "test": {
+            "dir",
+            "target",
+            "verboseerrors",
+            "host",
+            "port",
+            "network",
+            "createkey",
+            "keyfile",
+            "dockerfind"
+        },
+        "deploy": {
+            "dir",
+            "target",
+            "verboseerrors",
+            "host",
+            "port",
+            "network",
+            "createkey",
+            "keyfile",
+            "dockerfind",
+            "targetversion",
+            "nondeploy",
+            "upgrade"
+        },
+        "dockertest": {
+            "dir",
+            "target",
+            "verboseerrors",
+            "network",
+            "linger",
+            "tag",
+            "verbosefluree",
+            "persistent"
+        },
+        "dockerdeploy": {
+            "db",
+            "dir",
+            "target",
+            "verboseerrors",
+            "tag",
+            "daemonize",
+            "targetversion",
+            "nondeploy",
+            "persistent"
+        },
+        "dockerparams": {
+            "tag"
+        },
+        "artifactdeploy": {
+            "input:db",
+            "host",
+            "port",
+            "createkey",
+            "keyfile",
+            "dockerfind",
+            "targetversion",
+            "upgrade"
+        },
+        "guesttest": {
+            "target",
+            "verboseerrors",
+            "network",
+            "keyfile",
+            "linger",
+            "verbosefluree",
+            "usepersistent"
+        },
+        "guestdeploy": {
+            "db",
+            "target",
+            "verboseerrors",
+            "keyfile",
+            "linger",
+            "verbosefluree",
+            "targetversion",
+            "nondeploy",
+            "usepersistent"
+        },
+        "versioncheck": {
+            "tag"
+        },
+        "dockerstart": {
+            "tag",
+            "persistent"
+        },
+        "dockerstop": {
+            "tag"
+        },
+        "freezepart": {
+            "part",
+            "dir"
+        },
+        "checkpart": {
+            "part",
+            "dir"        
+        },
+        "unfreezedeps": {
+            "part",
+            "dir"        
+        },
+        "refreezedeps": {
+            "part",
+            "dir",
+        },
+        "freezetarget": {
+            "dir",
+            "target",
+            "verbosebuildfile"
+        },
+        "artifactupgrade": {
+            "host",
+            "port",
+            "db",
+            "beta",
+            "targetversion",
+            "nondeploy",
+            "artifactdir",
+            "createkey",
+            "keyfile",
+            "dockerfind"
+        },
+        "version": {}
+    }
+    if CRYPTO_OK:
+        if DOCKER_OK:
+            if runs_in_docker():
+                subcommands = ["artifact",
+                               "guesttest",
+                               "guestdeploy",
+                               "version"]
+            else:
+                subcommands = ["artifact",
+                               "test",
+                               "deploy",
+                               "dockertest",
+                               "dockerdeploy",
+                               "dockerparams",
+                               "artifactdeploy",
+                               "freezepart",
+                               "checkpart",
+                               "unfreezedeps",
+                               "refreezedeps",
+                               "freezetarget",
+                               "artifactupgrade",
+                               "version",
+                               "versioncheck",
+                               "dockerstart",
+                               "dockerstop"]
+        else:
+            if runs_in_docker():
+                subcommands = ["artifact",
+                               "guesttest",
+                               "guestdeploy",
+                               "version"]
+            else:
+                subcommands = ["artifact",
+                               "test",
+                               "deploy",
+                               "freezepart",
+                               "checkpart",
+                               "unfreezedeps",
+                               "refreezedeps",
+                               "freezetarget",
+                               "artifactupgrade",
+                               "version"]
+    else:
+        subcommands = ["artifact"]
+    for subcommand in subcommands:
+        sc_help = helps[subcommand]
+        sc_args = argsmap[subcommand]
+        parsers[subcommand] = subparsers.add_parser(subcommand, help=sc_help)
+        parsers[subcommand].add_argument('--subcommand', help=argparse.SUPPRESS, default=subcommand)
+        todo = {
+            "dir",
+            "target",
+            "verboseerrors",
+            "host",
+            "port",
+            "network",
+            "createkey",
+            "keyfile",
+            "dockerfind",
+            "linger",
+            "tag",
+            "verbosefluree",
+            "output",
+            "input",
+            "db",
+            "daemonize",
+            "nondeploy",
+            "beta",
+            "targetversion",
+            "allversions",
+            "upgrade",
+            "part",
+            "verbosebuildfile",
+            "artifactdir",
+            "persistent",
+            "usepersistent"
+        }
+        for sc_arg in sc_args:
+            for subarg in sc_arg.split(":"):
+                sa_help = helps[subarg]
+                if subarg in defaults:
+                    sa_default = defaults[subarg]
+                    if not sa_default is None and not sa_default:
+                        parsers[subcommand].add_argument('--' + subarg,
+                                                         action='store_true',
+                                                         help=sa_help)
+                    else:
+                        parsers[subcommand].add_argument("--" + subarg,
+                                                         help=sa_help,
+                                                         default=sa_default)
+                else:
+                    parsers[subcommand].add_argument(subarg, help=sa_help)
+                todo.remove(subarg)
+        for subarg in todo:
+            parsers[subcommand].add_argument('--' + subarg, help=argparse.SUPPRESS, default=None)
+    args = parsers["main"].parse_args()
+    if not vars(args):
+        print("Please supply commandline agruments. Use --help for info")
+        sys.exit(1)
+    if args.subcommand == "artifact":
+        return await fsst.artifact_main(
+                         args.output,
+                         args.dir,
+                         args.target,
+                         args.verboseerrors,
+                         args.beta,
+                         args.targetversion,
+                         args.nondeploy,
+                         args.allversions)
+    createkey = args.createkey
+    port = args.port
+    if args.subcommand in ["test", "deploy", "guesttest", "guestdeploy", "artifactdeploy", "artifactupgrade"]:
+        startfluree = bool(args.subcommand in ["guesttest", "guestdeploy"])
+        createkey, port, createid = await fsst.get_createkey_and_port(args.createkey,
+                                                                 args.keyfile,
+                                                                 args.dockerfind,
+                                                                 args.port,
+                                                                 startfluree,
+                                                                 args.verbosefluree)
+    if args.subcommand == "test":
+        await fsst.test_main(
+                args.dir,
+                args.target,
+                args.verboseerrors,
+                args.host,
+                port,
+                args.network,
+                createkey,
+                createid)
+    elif args.subcommand == "deploy":
+        await fsst.deploy_main(
+                args.dir,
+                args.target,
+                args.verboseerrors,
+                args.host,
+                port, args.network,
+                createkey,
+                createid,
+                args.targetversion,
+                args.nondeploy,
+                args.upgrade)
+    elif args.subcommand == "dockertest":
+        await fsst.dockertest_main(
+                args.dir,
+                args.target,
+                args.verboseerrors,
+                args.network,
+                args.tag,
+                args.verbosefluree,
+                args.linger,
+                args.persistent)
+    elif args.subcommand == "dockerdeploy":
+        await fsst.dockerdeploy_main(
+                args.dir,
+                args.target,
+                args.verboseerrors,
+                args.db,
+                args.tag,
+                args.verbosefluree,
+                args.daemonize,
+                args.targetversion,
+                args.nondeploy,
+                args.persistent)
+    elif args.subcommand == "guesttest":
+        await fsst.guesttest_main(
+                args.target,
+                args.verboseerrors,
+                args.network,
+                args.linger,
+                createkey,
+                createid,
+                args.usepersistent)
+    elif args.subcommand == "guestdeploy":
+        await fsst.guestdeploy_main(
+                args.target,
+                args.verboseerrors,
+                args.db,
+                createkey,
+                createidi,
+                args.targetversion,
+                args.nondeploy,
+                args.usepersistent)
+    elif args.subcommand == "artifactdeploy":
+        await fsst.artifactdeploy_main(
+                args.input,
+                args.db,
+                args.host,
+                port,
+                createkey,
+                createid,
+                args.targetversion,
+                args.upgrade)
+    elif args.subcommand == "dockerparams":
+        await fsst.dockerparams_main(
+                args.tag)
+    elif args.subcommand == "version":
+        print("FSST VERSION:", fsst.VERSION)
+    elif args.subcommand == "versioncheck":
+        await fsst.versioncheck_main(
+                args.tag)
+    elif args.subcommand == "dockerstart":
+        await fsst.dockerstart_main(
+                args.tag,
+                args.persistent)
+    elif args.subcommand == "dockerstop":
+        await fsst.dockerstop_main(
+                args.tag)
+    elif args.subcommand == "freezepart":
+        await fsst.freezepart_main(
+                args.part,
+                args.dir)
+    elif args.subcommand == "checkpart":
+        await fsst.checkpart_main(
+                args.part,
+                args.dir)
+    elif args.subcommand == "unfreezedeps":
+        await fsst.unfreezedeps_main(
+                args.part,
+                args.dir)
+    elif args.subcommand == "refreezedeps":
+        await fsst.refreezedeps_main(
+                args.part,
+                args.dir)
+    elif args.subcommand == "freezetarget":
+        await fsst.freezetarget_main(
+                args.dir,
+                args.target,
+                args.verbosebuildfile)
+    elif args.subcommand == "artifactupgrade":
+        await fsst.artifactupgrade_main(
+                args.host,
+                args.port,
+                args.db,
+                args.beta,
+                args.targetversion,
+                args.nondeploy,
+                args.artifactdir,
+                createkey,
+                createid)
+    else:
+        print("ERROR: impossible subcommand:", args.subcommand)
+
+LOOP = asyncio.get_event_loop()
+LOOP.run_until_complete(argparse_main())

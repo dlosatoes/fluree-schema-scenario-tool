@@ -1,0 +1,8 @@
+default:
+  - ~
+  - ~
+  - depends_on:
+      - stage3
+    defer_tests:
+      - stage2
+      - stage3
