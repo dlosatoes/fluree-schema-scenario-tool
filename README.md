@@ -8,10 +8,16 @@ The following sub-commands run without docker and without a local FlureeDB serve
 
 * [version](doc/version.MD) : Print the *fsst* version
 * [artifact](doc/artifact.MD) : Compile a single file FlureeDB schema from a [build target](doc/buildtarget.MD).
+* [freezepart](doc/freezepart.MD): Freeze a given build-part and its dependencies and create an empty new version.
+* [checkpart](doc/checkpart.MD): Check the integrity of the frozen components of a build-part.
+* [unfreezedeps](doc/unfreezedeps.MD): Unfreeze the dependencies of a build-part; use with care.
+* [refreezedeps](doc/refreezedeps.MD): Refreeze the unfrozen dependencies of a build-part.
+* [freezetarget](doc/freezetarget.MD): Freeze a build target and create a new empty future version.
 
 The following sub-commands can run without docker, but need a FlureeDB server to communicate with
 
 * [artifactdeploy](doc/artifactdeploy.MD) : Create a FlureeDB database and deploy the transactions in the artifact file to it.
+* [artifactupgrade](doc/artifactupgrade.MD) : Do a smart upgrade using database stored upgrade info.
 * [deploy](doc/deploy.MD) : Compile FlureeDB schema from a [build target](doc/buildtarget.MD) and deploy it to FlureeDB.
 * [test](doc/test.MD) : Run all unit tests for a [build target](doc/buildtarget.MD)
 
@@ -30,7 +36,7 @@ Prior to using the *fsst* tool, use *pip install* to install all dependencies.
 Note that these dependencies should not be needed if you only intent to use the unit-test (using docker) or the docker temp instance of Fluree.
 
 ```bash
-python3 -m pip install base58 aioflureedb bitcoinlib docker
+python3 -m pip install base58 aioflureedb bitcoinlib docker PyYAML
 ```
 On windows you need also need this to make bitcoinlib work:
 ```powershell
