@@ -27,8 +27,8 @@ If you have Docker installed, the following commands should also be available
 * [dockerstart](doc/dockerstart.MD) : Start a FlureeDB version in a docker container.
 * [dockerstop](doc/dockerstop.MD) : Stop docker container running given FlureeDB version.
 * [dockerparams](doc/dockerparams.MD) : Retreive base info from a running docker container running a given FlureeDB version.
-* [dockerdeploy](doc/dockerdeploy.MD): Start an *fsst* docker container and compile and deploy a FlureeDB schema from a [build target](buildtarget.MD), from within the container.
-* [dockertest](doc/dockertest.MD): Start an *fsst* docker container and run all unit tests for a [build target](buildtarget.MD) from within the container.
+* [dockerdeploy](doc/dockerdeploy.MD): Start an *fsst* docker container and compile and deploy a FlureeDB schema from a [build target](doc/buildtarget.MD), from within the container.
+* [dockertest](doc/dockertest.MD): Start an *fsst* docker container and run all unit tests for a [build target](doc/buildtarget.MD) from within the container.
 
 ### Dependencies
 
