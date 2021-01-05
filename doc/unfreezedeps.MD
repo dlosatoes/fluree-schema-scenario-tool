@@ -34,6 +34,12 @@ To:
 
 Invoking the unfreezedeps command allows for this to be done.
 
+The *unfreezedeps* command will:
+
+* Extract dependency info from the build-part lockfile
+* Extract dependency info from the build-part level build.yml file
+* Write above data to an editable YAML file named *unfrozen_deps.yml*
+
 Note that editing already frozen versions is not competely without risk. Care should be taken to make sure
 that old version builds shall still result in the same outcomes. 
 
