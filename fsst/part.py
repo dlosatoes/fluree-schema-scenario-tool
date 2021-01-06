@@ -185,7 +185,7 @@ class PartDir:
         os.remove(un_file)
 
 # pd = PartDir("../demo-schema-parts", "there_can_be_only_one")
-pd = PartDir("../demo-schema-parts", "roles")
+# pd = PartDir("../demo-schema-parts", "roles")
 # pd.freeze()
 # pd.unfreeze_deps()
-pd.refreeze_deps()
+# pd.refreeze_deps()
