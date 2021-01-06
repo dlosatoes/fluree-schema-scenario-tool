@@ -180,7 +180,8 @@ async def argparse_main():
             "network",
             "createkey",
             "keyfile",
-            "dockerfind"
+            "dockerfind",
+            "tag"
         },
         "deploy": {
             "dir",

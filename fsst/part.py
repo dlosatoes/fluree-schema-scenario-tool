@@ -65,10 +65,13 @@ class PartDir:
         self.part = part
         if not os.path.isdir(flureedir):
             raise RuntimeError("Invalid fluree_parts dir : " + flureedir)
-        lock_path = os.path.join(flureedir, part + "-lock.json")
+        lockdir_path = os.path.normpath(flureedir) + "-lock"
+        if not os.path.isdir(lockdir_path):
+            os.mkdir(lockdir_path)
+        lock_path = os.path.join(lockdir_path, part + "-part.json")
         file_path = os.path.join(flureedir, part + ".json")
         dir_path  = os.path.join(flureedir, part)
-        deps_path = os.path.join(flureedir, part, "build.yml")
+        deps_path = os.path.join(flureedir, part, "deps.yml")
         haslockfile = os.path.isfile(lock_path)
         hasfile = os.path.isfile(file_path)
         hasdir = os.path.isdir(dir_path)
@@ -175,13 +178,13 @@ class PartDir:
             self.latest_lock[key]["defer_tests"] = unfrozen[key]["defer_tests"]
         with open(self.lock_path,"w") as lockfile:
             json.dump(self.latest_lock, lockfile)
-        buildfile = os.path.join(self.dir_path, "build.yml")
+        buildfile = os.path.join(self.dir_path, "deps.yml")
         serialized = yaml.dump(mypart)
         with open(buildfile,"w") as bfile:
             bfile.write(serialized)
         os.remove(un_file)
 
-#pd = PartDir("../demo-schema-parts", "there_can_be_only_one")
+# pd = PartDir("../demo-schema-parts", "there_can_be_only_one")
 pd = PartDir("../demo-schema-parts", "roles")
 # pd.freeze()
 # pd.unfreeze_deps()
