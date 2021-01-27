@@ -144,7 +144,7 @@ async def argparse_main():
         "network" : netname,
         "createkey" : None,
         "keyfile" : None,
-        "dockerfind" : "beta",
+        "dockerfind" : None,
         "linger": False,
         "tag": "beta",
         "verbosefluree": False,
@@ -154,7 +154,6 @@ async def argparse_main():
         "targetversion": None,
         "nondeploy": False,
         "allversions": False,
-        "targetversion": None,
         "upgrade": None,
         "artifactdir": "artifacts",
         "persistent": None,
@@ -181,7 +180,6 @@ async def argparse_main():
             "createkey",
             "keyfile",
             "dockerfind",
-            "tag"
         },
         "deploy": {
             "dir",
@@ -227,9 +225,7 @@ async def argparse_main():
             "port",
             "createkey",
             "keyfile",
-            "dockerfind",
-            "targetversion",
-            "upgrade"
+            "dockerfind"
         },
         "guesttest": {
             "target",
