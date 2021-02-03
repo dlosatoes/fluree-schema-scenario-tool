@@ -59,6 +59,33 @@ def get_mains_data(dir_path, file_path):
             rval.append(get_sources(dir_path, filepath, transactions))
     return rval
 
+class Version:
+    def __init__(self, vname, vobj, isfile):
+        self.vname = vname
+        if "depends_on" in vobj:
+           self.depends_on = vobj["depends_on"]
+        else:
+            self.depends_on = []
+        if "transaction_count" in vobj:
+            self.transaction_count = vobj["transaction_count"]
+        else:
+            self.transaction_count = 0
+        if "frozen_deps" in vobj:
+            self.frozen_deps = vobj["frozen_deps"]
+        else:
+            self.frozen_deps = False
+        hashes = vobj["hashes"]
+        self.mainfile = "OOPS"
+        for key in hashes.keys():
+            if (isfile or key[:4] == "main") and key[-5:] == ".json":
+                self.mainfile = key
+            else:
+                print("skip:", key, key[:4] == "main", key[-5:] == ".json")
+    def __str__(self):
+        return self.vname + " " + str(self.depends_on) + " " + str(self.transaction_count) + " " + str(self.frozen_deps) + " " +  self.mainfile
+
+
+
 class PartDir:
     def __init__(self, flureedir, part):
         self.flureedir = flureedir
@@ -154,8 +181,14 @@ class PartDir:
         newnum = len(self.mains)
         vstring = "v" + str(newnum).zfill(6)
         unfrozen[vstring] = dict()
-        unfrozen[vstring]["depends_on"] = self.latest_deps["depends_on"]
-        unfrozen[vstring]["defer_tests"] = self.latest_deps["defer_tests"]
+        if "depends_on" in self.latest_deps:
+            unfrozen[vstring]["depends_on"] = self.latest_deps["depends_on"]
+        else:
+            unfrozen[vstring]["depends_on"] = []
+        if "defer_tests" in self.latest_deps:
+            unfrozen[vstring]["defer_tests"] = self.latest_deps["defer_tests"]
+        else:
+            unfrozen[vstring]["defer_tests"] = []
         for key in self.latest_lock.keys():
              unfrozen[key] = dict()
              unfrozen[key]["depends_on"] = self.latest_lock[key]["depends_on"]
@@ -183,9 +216,39 @@ class PartDir:
         with open(buildfile,"w") as bfile:
             bfile.write(serialized)
         os.remove(un_file)
+    def max_version(self):
+        keys = self.latest_lock.keys()
+        maxnum = 0
+        version = "beta"
+        if keys:
+            for key in keys:
+                print(key)
+                num = int(key[1:])
+                if num > maxnum:
+                    version = key
+                    maxnum = num
+        return version
+    def get_version(self, version):
+        if version == "beta":
+            return Version("beta", self.latest_deps, self.isfile)
+        return Version(version, self.latest_lock[version], self.isfile)
+    def get_latest(self):
+        return self.get_version(self.max_version())
+    def get_beta(self):
+        return self.get_version("beta")
 
-# pd = PartDir("../demo-schema-parts", "there_can_be_only_one")
-# pd = PartDir("../demo-schema-parts", "roles")
-# pd.freeze()
-# pd.unfreeze_deps()
-# pd.refreeze_deps()
+pd = PartDir("../fluree_parts", "there_can_be_only_one")
+print()
+print(pd.get_latest())
+print()
+print(pd.get_beta())
+
+pd = PartDir("../fluree_parts", "roles")
+print()
+print(pd.get_latest())
+print()
+print(pd.get_beta())
+
+pd.freeze()
+#pd.unfreeze_deps()
+#pd.refreeze_deps()

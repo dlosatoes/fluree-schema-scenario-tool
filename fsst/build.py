@@ -2,6 +2,7 @@ import os
 import json
 import shutil
 import yaml
+from part import PartDir
 
 def deps_if_no_deps(flureedir, part, prevpart):
     partfile = os.path.join(flureedir, part + ".json")
@@ -69,5 +70,17 @@ class Build:
         if target not in self.build_info:
             raise RuntimeError("Build target '" + target + "' not found in " + self.buildfile_path)
         self.targetbuild = self.build_info[target]
+        print(self.targetbuild)
+        self.parts = dict()
+        for candidate in self.targetbuild:
+            for part in candidate.keys():
+                if part not in self.parts:
+                    self.parts[part] = dict()
+                    self.parts[part]["obj"] = PartDir(flureedir, part)
+                    self.parts[part]["deps"] = self.parts[part]["obj"].latest_deps
+                    self.parts[part]["lock"] = self.parts[part]["obj"].latest_lock
+        print(self.buildfile_path)
+        print()
+        print(self.parts)
 
-build = Build("../demo-schema-parts", "default")
+build = Build("../fluree_parts", "default")
