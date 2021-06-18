@@ -11,7 +11,7 @@ The artifactdeploy command has two positional comandline arguments:
 ./fsst artifactdeploy artifact.json test/mydb
 ```
 
-Like the [deploy](deploy.MD) and the [test](test.MD) subcommands, the artifactdeploy subcommand has the optional *--host* and *--port* arguments (defaulting to *localhost* and *8080*) that can be used to designate a FlureeDB host.
+Like the [deploy](deploy.MD) and the [test](test.MD) subcommands, the artifactdeploy subcommand has the optional *--host* and *--port* arguments (defaulting to *localhost* and *8090*) that can be used to designate a FlureeDB host.
 
 ```bash
 ./fsst artifactdeploy artifact.json test/mydb --host otherhost --port 17080

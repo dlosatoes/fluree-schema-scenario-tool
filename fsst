@@ -14,7 +14,7 @@ import time
 import hashlib
 import asyncio
 import itertools
-VERSION = "0.2.6"
+VERSION = "0.2.7"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -917,12 +917,12 @@ def get_container_info(container):
     """Get host port and create key from docker"""
     hostport = None
     createkey = None
-    if ("HostConfig" in container.attrs and
-            "PortBindings" in container.attrs["HostConfig"] and
-            "8080/tcp" in container.attrs["HostConfig"]["PortBindings"]):
-        for binding in container.attrs["HostConfig"]["PortBindings"]["8080/tcp"]:
-            if "HostPort" in binding:
-                hostport = binding["HostPort"]
+    if ("HostConfig" in container.attrs and "PortBindings" in container.attrs["HostConfig"]):
+        for portoption in ["8090/tcp", "8090/tcp"]:
+            if ( portoption in container.attrs["HostConfig"]["PortBindings"]):
+                for binding in container.attrs["HostConfig"]["PortBindings"][portoption]:
+                    if "HostPort" in binding:
+                        hostport = binding["HostPort"]
     command_result = container.exec_run("cat default-private-key.txt")
     if command_result.exit_code == 0:
         createkey = command_result.output.decode()
@@ -961,7 +961,10 @@ def run_in_docker(tag, command, directory, daemonize, expose):
     ports = dict()
     name = "fsst-guestcommand-" + tag
     if expose or daemonize:
-        ports["8080/tcp"] = 8090
+        if tag == "stable":
+            ports["8090/tcp"] = 8090
+        else:
+            ports["8090/tcp"] = 8090
     try:
         container = client.containers.run(match, command, mounts=[mount], ports=ports, detach=True, auto_remove=True, name=name)
     except docker.errors.APIError as exp:
@@ -994,7 +997,7 @@ async def get_createkey_and_port(createkey, keyfile, dockerfind, port, startflur
     # pylint: disable=too-many-arguments
     if startfluree:
         rval = None
-        command = ["/bin/bash", "/usr/src/fsst/fluree_start.sh"]
+        command = ["/bin/bash", "/usr/src/fsst/fluree_start.sh", "-Dfdb-api-port=8090"]
         if not verbosefluree:
             subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
@@ -1107,9 +1110,12 @@ async def dockertest_main(directory, target, verboseerrors, network, tag, verbos
 async def dockerstart_main(tag):
     """Main function for the dockerstart subcommand"""
     imagename = "pibara/fsst:" + tag
-    command = "/bin/bash /usr/src/fsst/fluree_start.sh"
+    command = "/bin/bash /usr/src/fsst/fluree_start.sh  -Dfdb-api-port=8090"
     ports = dict()
-    ports["8080/tcp"] = 8090
+    if tag == "stable":
+        ports["8090/tcp"] = 8090
+    else:
+        ports["8090/tcp"] = 8090
     client = docker.from_env()
     name = "fsst-dockerstart-" + tag
     try:
@@ -1195,10 +1201,11 @@ async def dockerdeploy_main(directory, target, verboseerrors, dbase, tag, verbos
 async def guesttest_main(target, verboseerrors, network, linger, createkey, createid):
     """Main function for the guesttest subcommand"""
     # pylint: disable=too-many-arguments
+    prt = 8090
     await fluree_main(notest=False,
                       network=network,
                       host="localhost",
-                      port=8080,
+                      port=prt,
                       output=None,
                       createkey=createkey,
                       createid=createid,
@@ -1280,9 +1287,9 @@ async def dockerparams_main(tag):
         createkey = echo.output.decode()
     if ("HostConfig" in container.attrs and
             "PortBindings" in container.attrs["HostConfig"] and
-            "8080/tcp" in container.attrs["HostConfig"]["PortBindings"] and
-            container.attrs["HostConfig"]["PortBindings"]["8080/tcp"]):
-        for binding in container.attrs["HostConfig"]["PortBindings"]["8080/tcp"]:
+            "8090/tcp" in container.attrs["HostConfig"]["PortBindings"] and
+            container.attrs["HostConfig"]["PortBindings"]["8090/tcp"]):
+        for binding in container.attrs["HostConfig"]["PortBindings"]["8090/tcp"]:
             if "HostPort" in binding:
                 port = int(binding["HostPort"])
     print("IMAGE:", tag)
@@ -1291,6 +1298,7 @@ async def dockerparams_main(tag):
 
 async def guestdeploy_main(target, verboseerrors, dbase, createkey, createid):
     """Main function for the guestdeploy subcommand"""
+    prt = 8090
     await fluree_main(notest=True,
                       network=None,
                       host=None,
@@ -1301,7 +1309,7 @@ async def guestdeploy_main(target, verboseerrors, dbase, createkey, createid):
                       target=target,
                       fluree_parts="fluree_parts",
                       verboseerrors=verboseerrors)
-    await artifactdeploy_main("artifact.json", dbase, "localhost", 8080, createkey, createid)
+    await artifactdeploy_main("artifact.json", dbase, "localhost", prt, createkey, createid)
     print("LINGER == True")
     count = 0
     while True:
@@ -1335,7 +1343,7 @@ async def argparse_main():
         "target": "FlureeDB, build target as defined in build.json ('default' if undefined)",
         "verboseerrors": "Add verbose errors to rules without an error defined.",
         "host": "FlureeDB host. (default localhost)",
-        "port": "FlureeDB port. (default 8080)",
+        "port": "FlureeDB port. (default 8090)",
         "network": "FlureeDB network name. (generate if unspecified)",
         "createkey": "FlureeDB signing key for creation (alternative for --keyfile or --dockerfind)",
         "keyfile": "File containing FlureeDB signing key for creation (alternative for --createkey or --dockerfind)",
@@ -1354,7 +1362,7 @@ async def argparse_main():
         "target" : "default",
         "verboseerrors": False,
         "host" : "localhost",
-        "port" : "8080",
+        "port" : "8090",
         "network" : netname,
         "createkey" : None,
         "keyfile" : None,

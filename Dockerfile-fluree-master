@@ -2,17 +2,19 @@ FROM clojure:tools-deps-1.10.1.727-slim-buster AS builder
 
 RUN apt-get update && \
     apt-get upgrade --yes && \
+    apt-get install -y curl software-properties-common && \
+    curl -sL https://deb.nodesource.com/setup_14.x | bash - && \
     apt-get install -y git zip && \
     mkdir -p /usr/share/man/man1 && \
     apt-get install -y maven && \
-    apt-get install -y npm && \
+    apt-get install -y nodejs && \
     apt-get install -y python3-pip && \
     python3 -m pip install requests
 
 RUN mkdir -p /usr/src/fluree-ledger
 WORKDIR /usr/src/fluree-ledger
 
-RUN git clone https://github.com/fluree/ledger.git .
+RUN git clone --depth 1 https://github.com/fluree/ledger.git .
 RUN clojure -A:test -Stree
 RUN make
 
@@ -41,6 +43,7 @@ RUN apt-get update && \
     # Unzip the fluree zip file and remove the zip.
     cd /usr/src && \
     unzip fluree-*.zip -d fsst/ && \
+    echo snapshot`date --iso-8601` >> VERSION && \
     rm fluree-*.zip && \
     # Remove stuff we no longer need.
     apt autoremove --yes && \

@@ -19,7 +19,7 @@ The --dir argument defaults to the name "fluree_parts". --target defaults to the
 ./fsst test --dir experiments --target user_ok
 ```
 
-Like the [artifactdeploy](artifactdeploy.MD) and the [deploy](deploy.MD) subcommands, the deploy subcommand has the optional *--host* and *--port* arguments (defaulting to *localhost* and *8080*) that can be used to designate a FlureeDB host.
+Like the [artifactdeploy](artifactdeploy.MD) and the [deploy](deploy.MD) subcommands, the deploy subcommand has the optional *--host* and *--port* arguments (defaulting to *localhost* and *8090*) that can be used to designate a FlureeDB host.
 
 ```bash
 ./fsst test --dir experiments --target user_ok --host otherhost --port 17080
