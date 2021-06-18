@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 from pyparsing import nestedExpr, LineEnd
 
+VERSION = "0.2.7"
+
 def remove_comments(data):
     rval = list()
     for line in data.split("\n"):
@@ -14,8 +16,17 @@ def reconstruct(rlist, indent=0):
     long_indent_string = " "*(indent+1)*4
     rval = "{"
     first = True
+    is_ledger = False
+    patch_next = False
     for subval in rlist:
         if isinstance(subval, str):
+            if patch_next:
+                subval = subval[:-1] + "-fsst-" + VERSION + subval[-1:]
+            patch_next = False
+            if subval == "ledger":
+                is_ledger = True
+            if is_ledger and subval == ":mvn/version":
+                patch_next = True
             if subval[0] == ":" :
                 if rval[-1] == "{" or first:
                     rval += subval
@@ -29,6 +40,7 @@ def reconstruct(rlist, indent=0):
                 if subval[0:2] == ";;":
                     rval += "\n" + indent_string + "    "
         else:
+            patch_next = False
             if not first:
                 rval += " "
             rval += reconstruct(subval, indent + 1)
@@ -40,4 +52,5 @@ with open("deps.edn") as deps_file:
     data = deps_file.read()
 data = remove_comments(data)
 out = reconstruct(nestedExpr('{','}').parseString(data).asList()[0])
-print(out)
+with open("deps.edn","w") as deps_file:
+    deps_file.write(out)

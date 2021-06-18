@@ -9,14 +9,17 @@ RUN apt-get update && \
     apt-get install -y maven && \
     apt-get install -y nodejs && \
     apt-get install -y python3-pip && \
-    python3 -m pip install requests
+    python3 -m pip install requests && \
+    python3 -m pip install pyparsing
 
 RUN mkdir -p /usr/src/fluree-ledger
 WORKDIR /usr/src/fluree-ledger
 
 
 COPY git_clone_fluree_latest.py /usr/src/git_clone_fluree_latest.py
+COPY fluree_version_patch.py /usr/src/fluree-ledger
 RUN ../git_clone_fluree_latest.py
+RUN python3 ./fluree_version_patch.py
 RUN clojure -A:test -Stree
 RUN make
 
