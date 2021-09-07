@@ -17,8 +17,8 @@ WORKDIR /usr/src/fluree-ledger
 
 
 COPY git_clone_fluree_latest.py /usr/src/git_clone_fluree_latest.py
-COPY fluree_version_patch.py /usr/src/fluree-ledger
 RUN ../git_clone_fluree_latest.py
+COPY fluree_version_patch.py /usr/src/fluree-ledger
 RUN python3 ./fluree_version_patch.py
 RUN clojure -A:test -Stree
 RUN make
