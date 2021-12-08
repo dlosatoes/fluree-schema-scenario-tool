@@ -53,3 +53,4 @@ The third way to supply the command with a signing key is to supply the yey itse
 ./fsst deploy --dir experiments --target user_ok --createkey d7ecd0776898eb4cb8c064fffa62d91988a2a2233ba74de8649349c246fb7996
 ```
 
+Please note that on systems where *bitcoinlib* isn't available, an additional argument --createid will need to be supplied.

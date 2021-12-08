@@ -7,6 +7,7 @@ The test command has no positional arguments, only optional arguments.
 The primary optional arguments are:
 
 * --dir : The top level build directory of the [fsst build target](buildtarget.MD) tree.
+* --api : From version 0.3 and up, the directory containing the [portable Domain-API definition](https://github.com/pibara/aioflureedb/blob/master/apimap.MD)
 * --target : The target as defined in build.json (found in the dir specified by --dir).
 * --network : The network name for the database to deploy to.
 
@@ -53,3 +54,4 @@ The third way to supply the command with a signing key is to supply the yey itse
 ./fsst test --dir experiments --target user_ok --createkey d7ecd0776898eb4cb8c064fffa62d91988a2a2233ba74de8649349c246fb7996
 ```
 
+Please note that on systems where *bitcoinlib* isn't available, an additional argument --createid will need to be supplied.

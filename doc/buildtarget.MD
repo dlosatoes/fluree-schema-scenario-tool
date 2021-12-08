@@ -1,6 +1,6 @@
 ## Buld targets and directory structure
 
-This page describes the directory structure used by version 0.1 and version 0.2 of the *fsst* tool. Changes are planned for the 0.3 version in order to allow the use of *fsst* for gracefull schema upgrades on acceptance and production systems..
+This page describes the directory structure used by version 0.1, 0.2, and version 0.3 of the *fsst* tool. Changes are planned for a version >=0.4 in order to allow the use of *fsst* for gracefull schema upgrades on acceptance and production systems..
 
 ### Project directory structure.
 

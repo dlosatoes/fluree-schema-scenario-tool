@@ -4,7 +4,7 @@ The *dockertest* subcommand has the same function as the [test](test.MD) subcomm
 
 This is very usefull when we want to test our project against multiple FlureeDB versions, but it does come at a price. It can take a bit of time for the docker container and FlureeDB to spin up before the test is run.
 
-The dockertest command only has optional commandline parameters, but chances are you will want to specify a few. The options --dir, --target and --verboseerrors work exactly as they do for the [test](test.MD) subcommand. 
+The dockertest command only has optional commandline parameters, but chances are you will want to specify a few. The options --dir, --api, --target and --verboseerrors work exactly as they do for the [test](test.MD) subcommand. 
 
 The --tag option specifies which tagged version of the pibara/fsst should be used as docker container.
 

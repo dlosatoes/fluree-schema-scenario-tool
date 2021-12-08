@@ -48,6 +48,8 @@ The file contains a simple JSON array of strings. Each string in the array desig
 The *user.json* and *prepare.json* files are mandatory. The other ones are optional. We'll discuss the content of these files in the *testing* section below.
 
 
+Next to, or instead of, the *test.json* file, a *step or stage directory* may contain the file *domain.json*. You will need to be running fsstversion 0.3 or higher in order to use the [domain-API test definition](domain.MD). When that file is used, domain-API tests defined in Python will be run in their own databases in order to test parts of the domain API definition defined in an apimap.
+
 #### prepare.json
 
 In prepare.json we are responsible for defining the flureeDB auth records needed to run our tests with
