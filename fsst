@@ -922,7 +922,16 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                         ])
                     print(" - ok, added user roleds for", current_test["user"])
                 if current_test["test"] in api_modules:
-                    tester = api_modules[current_test["test"]].DomainApiTest({})
+                    tester = api_modules[current_test["test"]].DomainApiTest(
+                        {
+                            "auth_map": AUTHMAP,
+                            "fdb": fdb,
+                            "current_test": current_test,
+                            "current_test_index": test_index,
+                            "flureeclient": flureeclient,
+                            "database_name": dbase,
+                            "api_dir": api_dir
+                        })
                     role_api_root = full_public_api_root.get_api_by_role(current_test["role"])
                     test_api_root = full_testing_api_root.get_api_by_role("root")
                     print(" + Using Domain-API test module for root :", current_test["test"])
