@@ -16,7 +16,7 @@ import hashlib
 import asyncio
 import itertools
 import importlib.util
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 CRYPTO_OK = True
 KEY_TO_ID_OK = True
 DOCKER_OK = True
@@ -32,7 +32,7 @@ try:
     import base58
 except ModuleNotFoundError:
     print("WARNING: - base58 python lib not found.")
-    KEY_TO_ID_OK = False    
+    KEY_TO_ID_OK = False
 try:
     import bitcoinlib
 except ModuleNotFoundError:
@@ -65,67 +65,151 @@ except ModuleNotFoundError:
     DOCKER_OK = False
 
 
-AUTHMAP = {   
-    "auth00": ["TexyZ1iY2m8iHQoAGxvFd3e9ixWeUUjHdcG", "88a88244d7c7773f2378cd7adf37756c79171dea5f39588baf9b24b718317de9"],
-    "auth01": ["TeyvAruG3UtLE1VCYRYxC2J69axvae7bstP", "629d1bc7a9ef7e37dbc96c1fed665f3d161053caffd41fe200215f55d0e5390c"],
-    "auth02": ["TeyzwL1CwVu1zjnuxmfFa1VmgdnBgBV26mp", "abdec786a32ff02b0a184c84d47d00006b8489cfb759a519068b3e68ffcec21f"],
-    "auth03": ["TezMZ3WGqsNnr1TbhvJfwSkZ25fCuzBiebY", "b26f86b1b978c999a2b5ae031ee46af7b061d6b4ba97c44b986eac9f9e0e2c51"],
-    "auth04": ["TezYuxmu5RaW7gHrNCNEsfxpQmHhg3hDnJF", "1ab108dd3bca961186856c496e03bc470002fb497642e996d0ef01a177f184cf"],
-    "auth05": ["Tf2kGuGjRsf64C1q3c8z9b5E7kEARdj6q86", "0257770de7ac12c0df2e5ba7d3454d67444705d29aec442b905eee8095b83fbc"],
-    "auth06": ["Tf3Hdw7yzZefVXDwvX4VVEx2ybcoRDk3876", "e460310b2a5e98ecc8fc6b1bf0e1196e60c28977ea0a1c7ef7a537d6a8328e13"],
-    "auth07": ["Tf4EKiRitki94Z3Kn5azaVgELp92ZeoBVXB", "cb034e7e300423a180c0bbf65799bc48d9fbdf9d9737b9cb649109d6d765f6fd"],
-    "auth08": ["Tf5FLKYaRoPzKkkzMcstmQpqmDUnpGFQrxC", "5e3a6a2e91d8d2578233768932e9670f0903d3467df17f58100048d853b3bea8"],
-    "auth09": ["Tf5LP9HuJVGmv8ipGfSwfz7Rs35AUf1jLtC", "670f8725350416ba39bde4de0404c1b79f310c8fd6e09ccbab9fd7562b751a99"],
-    "auth10": ["Tf6u8HCXuzMcDp9T6FTVqvaXv5qULDJdXmw", "58c6f9a408b6db28d71b862b2a1ce7558f2520ba24360418ad346703aec70a94"],
-    "auth11": ["Tf7iqsUXLitPaSNwrvYnftuPuYKmVwx5pV9", "04ad5ab2b4166ebcc78d886e509fbc4b9bd7ec749aed7629420fb5d6d1b18edf"],
-    "auth12": ["Tf8JrKPiX3kpEZvU6FeCELpRotZW2e14SJk", "132e305bd87092b365162d9081f2fc5e4b3d8687a44d7f783b874cdf72b4f5c5"],
-    "auth13": ["Tf8nJjKTQBtfXCoXFPa9DiXzBUJGF5pBxM4", "c9f97f1e5642eaa1062d6f5ed06a4bcc99299cab20962e3f183bd3b5afd27a86"],
-    "auth14": ["TfALjQUSoupzGtkcqPzRbSevGBMYyu8EojD", "b8b2552084ccac35d450de138b188287496d4dec7a2926f01c3e6e11a587a1fa"],
-    "auth15": ["TfATx8EUDmZ18cM6wRktKqpT1Lso41gUBwh", "de8ca443917ca63a92dec8271b8464b6e1b3f65bc9a0ed388bf2f32aab9003dc"],
-    "auth16": ["TfCghFkQdz6hz5tmoxmxEAhAfrijbY5iukq", "e27b5a99f849a6ed44def9b9aa3c808412d2b3dafcc9aa2342ac813491049d9e"],
-    "auth17": ["TfCt1WytKFAYRfpGDUpHPuxk1tzxAkNrFJp", "2ea9ce90c75b3c49438540f04b34b40fd87acebee35a6b93a49e012675fae396"],
-    "auth18": ["TfENY4mnpDM26Bvb1Ff8SgRqGBMxgDQtRFP", "d889b413361cf532b49096d0db4ce98e1b4f8bf0a29684d8bb825a816ea21bdc"],
-    "auth19": ["TfEoKNnfMeHoSLJq2qchHrrQoXeQqnEAdf4", "5552346ad862e1ccd81831336d710841b97477ed057c805d6be5997833210631"],
-    "auth20": ["TfEVn9cKusd2K5smcRVhTE5XLjRe8XYJb4u", "e00b3e2029388ca6b0a469d4b2e759889f79beed33a6d0c54f22fd96ae3e995b"],
-    "auth21": ["TfF3rpg2NfUa4BZb41pSTrHLeCMy13FatGd", "f568f2426d6cb02d4b61a3ce533f42904a4d5b59b1609203d783482a0143605b"],
-    "auth22": ["TfFxqzzpf2MsvFTzxJFCwoPjmFsxS1FHe4y", "b624083aadb04222531b1c93da98e30281f75ce6e6b3bff2395950c6319947c1"],
-    "auth23": ["TfJq331BRfL33w2yJgBV5uvrpsf7U34Uxi1", "5851fee3b9ea6873f1a9d10cadf2b562f3aa6853b8018e1ebeef322d297307d5"],
-    "auth24": ["TfJVmmciLA9omhe2MUWiQY5ubXiQ5NT5g8a", "ffb82c8b047693cb4b61d34df6db3af3d7cce70fafa0c325cd14323dd961f63c"],
-    "auth25": ["TfK2gUzJGF2Ag8Dc8cwJVKAzFqL2ADM4Y6M", "5dd01645ebd21e95e42c9038c407af890196c2fd309f114564d03709a15ce1aa"],
-    "auth26": ["TfKCZCgyLQ28KMqiD4fgy9xz4jvfQWdgrQ6", "cc01464cdc0913d3643a6f9ea7d1393cd31c3ad011990fcbe83f1cdfc8b2362b"],
-    "auth27": ["Tey7yFeGt5JfyGiGwdz8f4LmBCYfxqCk4VW", "875175ef14950c64d70b336ec15eb18210629a6083a87d5c329d977921f4df80"],
-    "auth28": ["Tf6GnUYYz7ZtgQqBzs4rpqPqwpyycFAPKXy", "ef68a365b411126be8fbc3aefdf3c3f3ea65d0d297334dc0800612e4289f5225"],
-    "auth29": ["Tez1NYTfDZRzjaAowoFTKFHQBw4Z6bDzSw8", "33b7299d3ebe5590aba6618f2369911faf98fb0853a85d6d4cdeae0a951fae9e"],
-    "auth30": ["TfC9jrDs1PbXJtY5iJQCGSszs88xFBgZyKW", "09e65ff02f2e78379d753681ae37ca3964e72ec97765eb63e6b0b10533d34d26"],
-    "auth31": ["Tf8JAdpa3MASMLdWtcTvayHKdWBngZcWW88", "7881f421654c8ca1ff085b57a5ce8cd230894a30c66432e19c68f6a96d22add9"]
+AUTHMAP = {
+    "auth00": ["TexyZ1iY2m8iHQoAGxvFd3e9ixWeUUjHdcG",
+               "88a88244d7c7773f2378cd7adf37756c79171dea5f39588baf9b24b718317de9"],
+    "auth01": ["TeyvAruG3UtLE1VCYRYxC2J69axvae7bstP",
+               "629d1bc7a9ef7e37dbc96c1fed665f3d161053caffd41fe200215f55d0e5390c"],
+    "auth02": ["TeyzwL1CwVu1zjnuxmfFa1VmgdnBgBV26mp",
+               "abdec786a32ff02b0a184c84d47d00006b8489cfb759a519068b3e68ffcec21f"],
+    "auth03": ["TezMZ3WGqsNnr1TbhvJfwSkZ25fCuzBiebY",
+               "b26f86b1b978c999a2b5ae031ee46af7b061d6b4ba97c44b986eac9f9e0e2c51"],
+    "auth04": ["TezYuxmu5RaW7gHrNCNEsfxpQmHhg3hDnJF",
+               "1ab108dd3bca961186856c496e03bc470002fb497642e996d0ef01a177f184cf"],
+    "auth05": ["Tf2kGuGjRsf64C1q3c8z9b5E7kEARdj6q86",
+               "0257770de7ac12c0df2e5ba7d3454d67444705d29aec442b905eee8095b83fbc"],
+    "auth06": ["Tf3Hdw7yzZefVXDwvX4VVEx2ybcoRDk3876",
+               "e460310b2a5e98ecc8fc6b1bf0e1196e60c28977ea0a1c7ef7a537d6a8328e13"],
+    "auth07": ["Tf4EKiRitki94Z3Kn5azaVgELp92ZeoBVXB",
+               "cb034e7e300423a180c0bbf65799bc48d9fbdf9d9737b9cb649109d6d765f6fd"],
+    "auth08": ["Tf5FLKYaRoPzKkkzMcstmQpqmDUnpGFQrxC",
+               "5e3a6a2e91d8d2578233768932e9670f0903d3467df17f58100048d853b3bea8"],
+    "auth09": ["Tf5LP9HuJVGmv8ipGfSwfz7Rs35AUf1jLtC",
+               "670f8725350416ba39bde4de0404c1b79f310c8fd6e09ccbab9fd7562b751a99"],
+    "auth10": ["Tf6u8HCXuzMcDp9T6FTVqvaXv5qULDJdXmw",
+               "58c6f9a408b6db28d71b862b2a1ce7558f2520ba24360418ad346703aec70a94"],
+    "auth11": ["Tf7iqsUXLitPaSNwrvYnftuPuYKmVwx5pV9",
+               "04ad5ab2b4166ebcc78d886e509fbc4b9bd7ec749aed7629420fb5d6d1b18edf"],
+    "auth12": ["Tf8JrKPiX3kpEZvU6FeCELpRotZW2e14SJk",
+               "132e305bd87092b365162d9081f2fc5e4b3d8687a44d7f783b874cdf72b4f5c5"],
+    "auth13": ["Tf8nJjKTQBtfXCoXFPa9DiXzBUJGF5pBxM4",
+               "c9f97f1e5642eaa1062d6f5ed06a4bcc99299cab20962e3f183bd3b5afd27a86"],
+    "auth14": ["TfALjQUSoupzGtkcqPzRbSevGBMYyu8EojD",
+               "b8b2552084ccac35d450de138b188287496d4dec7a2926f01c3e6e11a587a1fa"],
+    "auth15": ["TfATx8EUDmZ18cM6wRktKqpT1Lso41gUBwh",
+               "de8ca443917ca63a92dec8271b8464b6e1b3f65bc9a0ed388bf2f32aab9003dc"],
+    "auth16": ["TfCghFkQdz6hz5tmoxmxEAhAfrijbY5iukq",
+               "e27b5a99f849a6ed44def9b9aa3c808412d2b3dafcc9aa2342ac813491049d9e"],
+    "auth17": ["TfCt1WytKFAYRfpGDUpHPuxk1tzxAkNrFJp",
+               "2ea9ce90c75b3c49438540f04b34b40fd87acebee35a6b93a49e012675fae396"],
+    "auth18": ["TfENY4mnpDM26Bvb1Ff8SgRqGBMxgDQtRFP",
+               "d889b413361cf532b49096d0db4ce98e1b4f8bf0a29684d8bb825a816ea21bdc"],
+    "auth19": ["TfEoKNnfMeHoSLJq2qchHrrQoXeQqnEAdf4",
+               "5552346ad862e1ccd81831336d710841b97477ed057c805d6be5997833210631"],
+    "auth20": ["TfEVn9cKusd2K5smcRVhTE5XLjRe8XYJb4u",
+               "e00b3e2029388ca6b0a469d4b2e759889f79beed33a6d0c54f22fd96ae3e995b"],
+    "auth21": ["TfF3rpg2NfUa4BZb41pSTrHLeCMy13FatGd",
+               "f568f2426d6cb02d4b61a3ce533f42904a4d5b59b1609203d783482a0143605b"],
+    "auth22": ["TfFxqzzpf2MsvFTzxJFCwoPjmFsxS1FHe4y",
+               "b624083aadb04222531b1c93da98e30281f75ce6e6b3bff2395950c6319947c1"],
+    "auth23": ["TfJq331BRfL33w2yJgBV5uvrpsf7U34Uxi1",
+               "5851fee3b9ea6873f1a9d10cadf2b562f3aa6853b8018e1ebeef322d297307d5"],
+    "auth24": ["TfJVmmciLA9omhe2MUWiQY5ubXiQ5NT5g8a",
+               "ffb82c8b047693cb4b61d34df6db3af3d7cce70fafa0c325cd14323dd961f63c"],
+    "auth25": ["TfK2gUzJGF2Ag8Dc8cwJVKAzFqL2ADM4Y6M",
+               "5dd01645ebd21e95e42c9038c407af890196c2fd309f114564d03709a15ce1aa"],
+    "auth26": ["TfKCZCgyLQ28KMqiD4fgy9xz4jvfQWdgrQ6",
+               "cc01464cdc0913d3643a6f9ea7d1393cd31c3ad011990fcbe83f1cdfc8b2362b"],
+    "auth27": ["Tey7yFeGt5JfyGiGwdz8f4LmBCYfxqCk4VW",
+               "875175ef14950c64d70b336ec15eb18210629a6083a87d5c329d977921f4df80"],
+    "auth28": ["Tf6GnUYYz7ZtgQqBzs4rpqPqwpyycFAPKXy",
+               "ef68a365b411126be8fbc3aefdf3c3f3ea65d0d297334dc0800612e4289f5225"],
+    "auth29": ["Tez1NYTfDZRzjaAowoFTKFHQBw4Z6bDzSw8",
+               "33b7299d3ebe5590aba6618f2369911faf98fb0853a85d6d4cdeae0a951fae9e"],
+    "auth30": ["TfC9jrDs1PbXJtY5iJQCGSszs88xFBgZyKW",
+               "09e65ff02f2e78379d753681ae37ca3964e72ec97765eb63e6b0b10533d34d26"],
+    "auth31": ["Tf8JAdpa3MASMLdWtcTvayHKdWBngZcWW88",
+               "7881f421654c8ca1ff085b57a5ce8cd230894a30c66432e19c68f6a96d22add9"]
 }
 
-class FlushFile(object):
+class FlushFile:
     """Helper class for file like objects to always flush on write"""
-    def __init__(self, fd):
-        self.fd = fd
+    def __init__(self, file_descriptor):
+        """Constructor
+         Parameters
+         ----------
+         fd: string
+             File handle to wrap
+        """
+        self.file_desc = file_descriptor
 
-    def write(self, x):
-        ret = self.fd.write(x)
-        self.fd.flush()
+    def write(self, data):
+        """Write and flush the data
+
+        Parameters
+        ----------
+        data : str
+           Data to write
+
+        Returns
+        -------
+        int
+            return code
+        """
+        ret = self.file_desc.write(data)
+        self.file_desc.flush()
         return ret
 
     def writelines(self, lines):
-        ret = self.writelines(lines)
-        self.fd.flush()
+        """Write lines and flush
+
+        Parameters
+        ----------
+        lines: list
+            Lines to write and flush
+
+        Returns
+        -------
+        int
+            Return code
+        """
+        ret = self.file_desc.writelines(lines)
+        self.file_desc.flush()
         return ret
 
     def flush(self):
-        return self.fd.flush()
+        """Just flush
+
+        Returns
+        -------
+        int
+            Return code
+        """
+        return self.file_desc.flush()
 
     def close(self):
-        return self.fd.close()
+        """Close the file
+
+        Returns
+        -------
+        int
+            Return code
+        """
+        return self.file_desc.close()
 
     def fileno(self):
-        return self.fd.fileno()
+        """Get file number from file handle
+
+        Returns
+        -------
+        int
+            File number
+        """
+        return self.file_desc.fileno()
 
 
-sys.stdout = FlushFile(sys.stdout)  # Fix print() not always flushing when running in linux docker on a windows host
+sys.stdout = FlushFile(sys.stdout)  # Fix print() not always flushing when running in
+                                    #  linux docker on a windows host
 
 
 def key_to_id(privkey, createid):
@@ -145,7 +229,8 @@ def key_to_id(privkey, createid):
     if privkey:
         if not KEY_TO_ID_OK:
             if createid is None:
-                raise RuntimeError("Need to specify createid on systems without bitcoinlib/base58 support")
+                raise RuntimeError("Need to specify createid on systems without bitcoinlib/base58" +
+                                   " support")
             return createid
         # Remove the bitcoin network id and the checksum from the base58 decoded bitcoin adress,
         # then prefix with fluree network id.
@@ -276,7 +361,7 @@ def expand_operation(operation, subdir, fluree_parts, verboseerrors):
         path = fluree_parts + "/" + subdir + "/" + operation["code_expand"]
         with open(path) as datafile:
             data = datafile.read()
-            data = re.sub(' +', ' ', data.replace("\n"," "))
+            data = re.sub(' +', ' ', data.replace("\n", " "))
         if operation["code_expand"].split(".")[-1].lower() == "clj":
             # A clojure file contains the actual "code" content
             operation["code"] = data.rstrip()
@@ -291,7 +376,8 @@ def expand_operation(operation, subdir, fluree_parts, verboseerrors):
         if not "block" in operation["code_from_query"] and "name" in operation and subdir != ".":
             operation2 = copy.deepcopy(operation)
             operation2["name"] = operation["name"] + "_previous_block"
-            if "_id" in operation2 and isinstance(operation2["_id"], str) and "$" in operation2["_id"]:
+            if ("_id" in operation2 and isinstance(operation2["_id"], str) and
+                    "$" in operation2["_id"]):
                 operation2["_id"] = operation2["_id"] + "_previous_block"
             operation2["code"] = query_to_clojure_previous(operation2["code_from_query"], params)
             del operation2["code_from_query"]
@@ -325,7 +411,7 @@ def expand_transaction(transaction, subdir, fluree_parts, verboseerrors):
     for operation in transaction:
         op1, op2 = expand_operation(operation, subdir, fluree_parts, verboseerrors)
         rval.append(op1)
-        if isinstance(op2,dict):
+        if isinstance(op2, dict):
             rval.append(op2)
     return rval
 
@@ -734,6 +820,7 @@ async def run_test_scenario(database, subdir, fluree_parts, fdb, scenario):
 
 
 async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api_dir, api_modules):
+    # pylint: disable=too-many-statements, too-many-branches
     """Create a test database, initialize database with transactions up to stage and run all
        domain-API tests for stage.
 
@@ -763,8 +850,7 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
     async with  aioflureedb.FlureeClient(masterkey=key, auth_address=keyid, host=host,
                                          port=port) as flureeclient:
         await flureeclient.health.ready()
-        for test_index in range(0,len(tests)):
-            current_test = tests[test_index]
+        for test_index, current_test in enumerate(tests):
             coverage_treshold = current_test["coverage"]
             coverage = 0
             if test_index == 0:
@@ -790,15 +876,50 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                         print()
                         raise exp
                 print(" - ok, completed", len(transactions), "transactions on", dbase_name)
-                await database.command.transaction([{"_id": "_auth", "doc": key, "id": val[0]} for key,val in AUTHMAP.items()])
+                await database.command.transaction(
+                    [
+                        {
+                            "_id": "_auth",
+                            "doc": key,
+                            "id": val[0]
+                        }
+                        for key, val in AUTHMAP.items()
+                    ])
                 print(" - ok, added hard-coded _auth collection")
                 if current_test["auth_roles"]:
-                    await database.command.transaction([{"_id": ["_auth/id", current_test["addr"]], "roles": [["_role/id", role] for role in current_test["auth_roles"]]}])
+                    await database.command.transaction(
+                        [
+                            {
+                                "_id": ["_auth/id", current_test["addr"]],
+                                "roles": [
+                                    ["_role/id", role]
+                                    for role in current_test["auth_roles"]
+                                ]
+                            }
+                        ])
                     print(" - ok, added auth roles for", current_test["addr"])
-                await database.command.transaction([{"_id": "_user", "username": current_test["user"], "auth": [["_auth/id", current_test["addr"]]]}])
+                await database.command.transaction(
+                    [
+                        {
+                            "_id": "_user",
+                            "username": current_test["user"],
+                            "auth": [
+                                ["_auth/id", current_test["addr"]]
+                            ]
+                        }
+                    ])
                 print(" - ok, added test user", current_test["user"])
                 if current_test["user_roles"]:
-                    await database.command.transaction([{"_id": ["_user/username", current_test["user"]], "roles": [["_role/id", role] for role in current_test["user_roles"]]}])
+                    await database.command.transaction(
+                        [
+                            {
+                                "_id": ["_user/username", current_test["user"]],
+                                "roles": [
+                                    ["_role/id", role]
+                                    for role in current_test["user_roles"]
+                                ]
+                            }
+                        ])
                     print(" - ok, added user roleds for", current_test["user"])
                 if current_test["test"] in api_modules:
                     tester = api_modules[current_test["test"]].DomainApiTest({})
@@ -808,35 +929,42 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                     if getattr(tester, 'prepare_root', None) is not None:
                         print(" + Running prepare_root")
                         try:
-                            ok = await tester.prepare_root(role_api_root, test_api_root)
+                            is_ok = await tester.prepare_root(role_api_root, test_api_root)
                         except Exception as ex:
-                            print("     ERROR : Exception in prepare_root of test no",test_index)
+                            print("     ERROR : Exception in prepare_root of test no", test_index)
                             raise ex
-                        print("     res=", ok)
-                        if isinstance(ok, bool): 
-                            if not ok:
-                               raise RuntimeError("The prepare_root failed for test at index " + str(test_index))
-                        elif not(ok[0]):
-                            raise RuntimeError("The prepare_root failed for test at index " + str(test_index) + " : " + str(ok[1]))
+                        print("     res=", is_ok)
+                        if isinstance(is_ok, bool):
+                            if not is_ok:
+                                raise RuntimeError("The prepare_root failed for test at index " +
+                                                   str(test_index))
+                        elif not is_ok[0]:
+                            raise RuntimeError("The prepare_root failed for test at index " +
+                                               str(test_index) + " : " + str(is_ok[1]))
                     async with fdb(current_test["key"], current_test["addr"]) as user_database:
                         full_public_api = aioflureedb.FlureeDomainAPI(api_dir, user_database)
-                        full_testing_api = aioflureedb.FlureeDomainAPI(api_dir + "/fsst", user_database)
+                        full_testing_api = aioflureedb.FlureeDomainAPI(api_dir + "/fsst",
+                                                                       user_database)
                         role_api = full_public_api.get_api_by_role(current_test["role"])
                         test_api = full_testing_api.get_api_by_role("test")
-                        print(" + Using Domain-API test module for test user :", current_test["test"])
+                        print(" + Using Domain-API test module for test user :",
+                              current_test["test"])
                         if getattr(tester, 'prepare_user', None) is not None:
                             print(" + Running prepare_user")
                             try:
-                                ok = await tester.prepare_user(role_api, test_api)
+                                is_ok = await tester.prepare_user(role_api, test_api)
                             except Exception as ex:
-                                print("     ERROR : Exception in prepare_user of test no", test_index)
+                                print("     ERROR : Exception in prepare_user of test no",
+                                      test_index)
                                 raise ex
-                            print("     res=", ok)
-                            if isinstance(ok, bool):
-                                if not ok:
-                                    raise RuntimeError("The prepare_user failed for test at index " + str(test_index))
-                            elif not(ok[0]):
-                                raise RuntimeError("The prepare_user failed for test at index " + str(test_index) + " : " + str(ok[1]))
+                            print("     res=", is_ok)
+                            if isinstance(is_ok, bool):
+                                if not is_ok:
+                                    raise RuntimeError("The prepare_user failed for test at index "
+                                                       + str(test_index))
+                            elif not is_ok[0]:
+                                raise RuntimeError("The prepare_user failed for test at index " +
+                                                   str(test_index) + " : " + str(is_ok[1]))
                         for subtest in current_test["sub_tests"]:
                             subtest_name = subtest[0]
                             should_succeed = subtest[1]
@@ -845,73 +973,94 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                             go_on = True
                             idx = 0
                             while go_on:
-                                if getattr(tester, 'run_test_' + subtest_name + '_idx', None) is None:
+                                if getattr(tester, 'run_test_' + subtest_name + '_idx',
+                                           None) is None:
                                     go_on = False
                                 else:
                                     methods.append('run_test_' + subtest_name + "_idx")
-                                if go_on == False and idx==0 and getattr(tester, 'run_test_' + subtest_name, None) is not None:
+                                if (not go_on and idx == 0 and getattr(tester, 'run_test_' +
+                                                                       subtest_name, None) is not
+                                        None):
                                     methods.append('run_test_' + subtest_name)
                                     go_on = True
                                 idx += 1
                             for method in methods:
                                 print(" + Running", method)
                                 method_to_call = getattr(tester, method)
+                                # pylint: disable=broad-except
                                 try:
-                                    ok = await method_to_call(role_api, test_api)
+                                    is_ok = await method_to_call(role_api, test_api)
                                 except Exception as ex:
                                     print("    NOTICE: Exception cought in", method, ":", ex)
-                                    ok = False
-                                if ok is None:
-                                    print("     res=", ok, "Doesn't count to coverage.")
-                                elif isinstance(ok, bool):
-                                    if ok == should_succeed:
-                                        print("     res=", ok, "EXPECTED")
+                                    is_ok = False
+                                # pylint: enable=broad-except
+                                if is_ok is None:
+                                    print("     res=", is_ok, "Doesn't count to coverage.")
+                                elif isinstance(is_ok, bool):
+                                    if is_ok == should_succeed:
+                                        print("     res=", is_ok, "EXPECTED")
                                         coverage += 1
                                     else:
                                         if warn_only:
-                                            print("WARNING: res=", ok, "NOT EXPECTED")
+                                            print("WARNING: res=", is_ok, "NOT EXPECTED")
                                         else:
-                                            print("ERROR: res=", ok, "NOT EXPECTED")
-                                            raise RuntimeError("Unexpected result from method test for " + method + " at sub-test " + str(test_index))
-                                elif ok[0] == should_succeed:
-                                    print("     res=", ok[0], "EXPECTED", ok[1])
+                                            print("ERROR: res=", is_ok, "NOT EXPECTED")
+                                            raise RuntimeError(
+                                                "Unexpected result from method test for " +
+                                                method + " at sub-test " + str(test_index))
+                                elif is_ok[0] == should_succeed:
+                                    print("     res=", is_ok[0], "EXPECTED", is_ok[1])
                                     coverage += 1
                                 else:
                                     if warn_only:
-                                        print("WARNING: res=", ok, "NOT EXPECTED")
+                                        print("WARNING: res=", is_ok, "NOT EXPECTED")
                                     else:
-                                        print("ERROR: res=", ok, "NOT EXPECTED")
-                                        raise RuntimeError("Unexpected result from method test for " + method + " at sub-test " + str(test_index))
+                                        print("ERROR: res=", is_ok, "NOT EXPECTED")
+                                        raise RuntimeError("Unexpected result from method test for"
+                                                           + " " + method + " at sub-test " +
+                                                           str(test_index))
                         if getattr(tester, 'cleanup_user', None) is not None:
                             print(" + Running cleanup_user")
+                            # pylint: disable=broad-except
                             try:
-                                ok = await tester.cleanup_user(role_api, test_api)
+                                is_ok = await tester.cleanup_user(role_api, test_api)
                             except Exception as ex:
-                                print("     NOTICE : Exception in cleanup_user of test no ", test_index)
+                                print("     NOTICE : Exception in cleanup_user of test no ",
+                                      test_index)
                                 raise ex
-                            print("     res=", ok)
-                            if isinstance(ok, bool):
-                                if not ok:
-                                    raise RuntimeError("The cleanup_user failed for test at index " + str(test_index))
-                            elif not(ok[0]):
-                                raise RuntimeError("The cleanup_user failed for test at index " + str(test_index) + " : " + str(ok[1]))
+                            # pylint: enable=broad-except
+                            print("     res=", is_ok)
+                            if isinstance(is_ok, bool):
+                                if not is_ok:
+                                    raise RuntimeError("The cleanup_user failed for test at index "
+                                                       + str(test_index))
+                            elif not is_ok[0]:
+                                raise RuntimeError("The cleanup_user failed for test at index " +
+                                                   str(test_index) + " : " + str(is_ok[1]))
                     if getattr(tester, 'cleanup_root', None) is not None:
                         print(" + Running cleanup_root")
+                        # pylint: disable=broad-except
                         try:
-                            ok = await tester.cleanup_root(role_api_root, test_api_root)
+                            is_ok = await tester.cleanup_root(role_api_root, test_api_root)
                         except Exception as ex:
-                            print("     NOTICE : Exception in cleanup_root of test no ",test_index)
+                            print("     NOTICE : Exception in cleanup_root of test no ", test_index)
                             raise ex
-                        print("     res=", ok)
-                        if isinstance(ok, bool):
-                            if not ok:
-                                raise RuntimeError("The cleanup_root failed for test at index " + str(test_index))
-                        elif not(ok[0]):
-                            raise RuntimeError("The cleanup_root failed for test at index " + str(test_index) + " : " + str(ok[1]))
+                        # pylint: enable=broad-except
+                        print("     res=", is_ok)
+                        if isinstance(is_ok, bool):
+                            if not is_ok:
+                                raise RuntimeError("The cleanup_root failed for test at index " +
+                                                   str(test_index))
+                        elif not is_ok[0]:
+                            raise RuntimeError("The cleanup_root failed for test at index " +
+                                               str(test_index) + " : " + str(is_ok[1]))
                     if coverage_treshold > coverage:
-                        raise RuntimeError("Coverage insufficient for test no " + str(test_index) + " : " + str(coverage_treshold) + " > " + str(coverage))
+                        raise RuntimeError("Coverage insufficient for test no " +
+                                           str(test_index) + " : " + str(coverage_treshold) +
+                                           " > " + str(coverage))
                 else:
-                    raise RuntimeError("No domain-API python testing module loaded for " + current_test["test"])
+                    raise RuntimeError("No domain-API python testing module loaded for " +
+                                       current_test["test"])
 
 async def smartfunction_test(host, port, dbase, key, keyid, subdir, transactions, fluree_parts):
     """Create a test database, initialize database with transactions up to stage and run all
@@ -977,7 +1126,7 @@ async def smartfunction_test(host, port, dbase, key, keyid, subdir, transactions
 
 async def fluree_main(notest, network, host, port, output, createkey, createid,
                       target, fluree_parts, verboseerrors, api="apimap"):
-    # pylint: disable=too-many-branches, too-many-statements
+    # pylint: disable=too-many-branches, too-many-statements, fixme
     # TODO: We may want to dismantle this function and refactor. Below is a remnant
     #       of the 0.1 version of fsst that didn't yet use subcommands.
     """The tools main function
@@ -1011,14 +1160,14 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
         "name" : "lastBlock",
         "doc" : "Get the number of the last known block on the ledger",
         "code_from_query": {
-           "select": "?maxBlock",
-           "where": [
-               ["?s", "_block/number", "?bNum"],
-               ["?maxBlock",  "#(max ?bNum)"],
-               ["?s", "_block/number", "?maxBlock"]
-           ]
+            "select": "?maxBlock",
+            "where": [
+                ["?s", "_block/number", "?bNum"],
+                ["?maxBlock", "#(max ?bNum)"],
+                ["?s", "_block/number", "?maxBlock"]
+            ]
         }
-    },".",fluree_parts,False)[0]]
+    }, ".", fluree_parts, False)[0]]
     try:
         expanded = list()
         expanded.append(maxblock)
@@ -1123,9 +1272,11 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                 if os.path.isfile(testfile) and not notest:
                     with open(testfile) as testfil:
                         testsets = json.load(testfil)
-                    if os.path.isdir(api) and os.path.isdir(api + "/fsst") and os.path.isdir(api + "/roles") and os.path.isdir(api + "/fsst/tests"):
+                    if (os.path.isdir(api) and os.path.isdir(api + "/fsst") and
+                            os.path.isdir(api + "/roles") and os.path.isdir(api + "/fsst/tests")):
                         apimap_modules = dict()
-                        for modname in [fil[:-3] for fil in os.listdir(api + "/fsst/tests") if fil[-3:] == ".py"]:
+                        for modname in [fil[:-3] for fil in os.listdir(api + "/fsst/tests") if
+                                        fil[-3:] == ".py"]:
                             modpath = api + "/fsst/tests/" + modname + ".py"
                             spec = importlib.util.spec_from_file_location(modname, modpath)
                             apimap_modules[modname] = importlib.util.module_from_spec(spec)
@@ -1135,7 +1286,8 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                             else:
                                 print("NOTICE: Loaded Domain-API testing module", modname)
                         full_coverage = dict()
-                        for role in [fil[:-5] for fil in os.listdir(api + "/roles") if fil[-5:] == ".json"]:
+                        for role in [fil[:-5] for fil in os.listdir(api + "/roles") if
+                                     fil[-5:] == ".json"]:
                             full_coverage[role] = set()
                             with open(api + "/roles/" + role + ".json") as rolefile:
                                 role_data = json.load(rolefile)
@@ -1164,7 +1316,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                                         user = auth[1:]
                                     else:
                                         auth_info = AUTHMAP["auth00"]
-                                        user = auth00
+                                        user = "auth00"
                                     if "user" in test:
                                         user = test["user"]
                                     auth_roles = set()
@@ -1181,7 +1333,8 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                                         should_succeed = bool(test["should_succeed"])
                                     should_succeed_exceptions = set()
                                     if "should_succeed_exceptions" in should_succeed_exceptions:
-                                        should_succeed_exceptions = set(test["should_succeed_exceptions"])
+                                        should_succeed_exceptions = set(
+                                            test["should_succeed_exceptions"])
                                     warn_only = False
                                     if "warn_only" in test:
                                         warn_only = bool(test["warn_only"])
@@ -1199,14 +1352,16 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                                     warn_only_map = dict()
                                     for key in role_used:
                                         if key in should_succeed_exceptions:
-                                            should_succeed_map[key] = not(should_succeed)
+                                            should_succeed_map[key] = not should_succeed
                                         else:
                                             should_succeed_map[key] = should_succeed
                                         if key in warn_only_exceptions:
-                                            warn_only_map[key] = not(warn_only)
+                                            warn_only_map[key] = not warn_only
                                         else:
                                             warn_only_map[key] = warn_only
-                                    minimal_succeed_count = int((minimal_coverage + 0.01) * len(should_succeed_map.keys()) / 100)
+                                    minimal_succeed_count = int((minimal_coverage + 0.01) *
+                                                                len(should_succeed_map.keys()) /
+                                                                100)
                                     test_obj = dict()
                                     test_obj["role"] = role
                                     test_obj["test"] = test_name
@@ -1217,13 +1372,16 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                                     test_obj["user_roles"] = list(user_roles)
                                     test_obj["sub_tests"] = list()
                                     for key in should_succeed_map:
-                                        test_obj["sub_tests"].append([key, should_succeed_map[key], warn_only_map[key]])
+                                        test_obj["sub_tests"].append([key, should_succeed_map[key],
+                                                                      warn_only_map[key]])
                                     test_obj["coverage"] = minimal_succeed_count
                                     test_list.append(test_obj)
                                 else:
-                                    print("WARNING: role", role, " defined in", testfile, "not defined in", api + "/roles")
+                                    print("WARNING: role", role, " defined in",
+                                          testfile, "not defined in", api + "/roles")
                             else:
-                                print("WARNING: test in", testfile,"without api_role, skipping tests")
+                                print("WARNING: test in", testfile,
+                                      "without api_role, skipping tests")
                         await domainapi_test(host,
                                              port,
                                              database,
@@ -1234,7 +1392,9 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                                              api,
                                              apimap_modules)
                     else:
-                        print("WARNING: Skipping apimap tests because apimap dir is missing or incomplete:", api)
+                        print("WARNING: Skipping apimap tests because apimap dir is missing or",
+                              "incomplete:", api)
+
             maxstage += 1
         if output:
             # Write the expanded transaction list for all stages combined to a single artifact.
@@ -1269,7 +1429,7 @@ def get_container_info(container):
     createkey = None
     if ("HostConfig" in container.attrs and "PortBindings" in container.attrs["HostConfig"]):
         for portoption in ["8090/tcp", "8090/tcp"]:
-            if ( portoption in container.attrs["HostConfig"]["PortBindings"]):
+            if portoption in container.attrs["HostConfig"]["PortBindings"]:
                 for binding in container.attrs["HostConfig"]["PortBindings"][portoption]:
                     if "HostPort" in binding:
                         hostport = binding["HostPort"]
@@ -1290,7 +1450,7 @@ def get_from_docker(tag):
 
 def run_in_docker(tag, command, directory, daemonize, expose, api="apimap"):
     """Run a given command in a new docker container"""
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-locals, too-many-statements, too-many-branches, too-many-arguments
     print("COMMAND:", command)
     match = None
     lookfor = "pibara/fsst:" + tag
@@ -1307,10 +1467,12 @@ def run_in_docker(tag, command, directory, daemonize, expose, api="apimap"):
     if not os.path.isdir(workdir):
         print("ERROR:", workdir, "isn't a valid directory path")
         sys.exit(1)
-    mounts = [docker.types.Mount("/usr/src/fsst/fluree_parts", workdir, read_only=True, type="bind")]
+    mounts = [docker.types.Mount("/usr/src/fsst/fluree_parts",
+                                 workdir, read_only=True, type="bind")]
     apidir = os.path.join(os.getcwd(), api)
     if os.path.isdir(apidir):
-        mounts.append(docker.types.Mount("/usr/src/fsst/apimap", apidir, read_only=True, type="bind"))
+        mounts.append(docker.types.Mount("/usr/src/fsst/apimap",
+                                         apidir, read_only=True, type="bind"))
     ports = dict()
     name = "fsst-guestcommand-" + tag
     if expose or daemonize:
@@ -1319,7 +1481,8 @@ def run_in_docker(tag, command, directory, daemonize, expose, api="apimap"):
         else:
             ports["8090/tcp"] = 8090
     try:
-        container = client.containers.run(match, command, mounts=mounts, ports=ports, detach=True, auto_remove=True, name=name)
+        container = client.containers.run(match, command, mounts=mounts,
+                                          ports=ports, detach=True, auto_remove=True, name=name)
     except docker.errors.APIError as exp:
         print("ERROR: Problem starting docker container OR issue binding to 8090")
         print(exp)
@@ -1345,7 +1508,8 @@ def run_in_docker(tag, command, directory, daemonize, expose, api="apimap"):
         container.stop()
         print("Container stopped after keyboard interrupt")
 
-async def get_createkey_and_port(createkey, keyfile, dockerfind, port, startfluree, verbosefluree, createid=""):
+async def get_createkey_and_port(createkey, keyfile, dockerfind,
+                                 port, startfluree, verbosefluree, createid=""):
     """Get the create-key and fluree port using the relevant commandline info"""
     # pylint: disable=too-many-arguments
     if startfluree:
@@ -1404,7 +1568,8 @@ async def artifact_main(output, directory, target, verbose_errors):
                       verboseerrors=verbose_errors)
     return
 
-async def test_main(directory, target, verboseerrors, host, port, network, createkey, createid, api):
+async def test_main(directory, target, verboseerrors, host, port,
+                    network, createkey, createid, api):
     """Main function for the test subcommand"""
     # pylint: disable=too-many-arguments
     await fluree_main(notest=False,
@@ -1435,7 +1600,8 @@ async def deploy_main(directory, target, verboseerrors, host, port, network, cre
                       verboseerrors=verboseerrors)
     return
 
-async def dockertest_main(directory, target, verboseerrors, network, tag, verbosefluree, linger, api):
+async def dockertest_main(directory, target, verboseerrors,
+                          network, tag, verbosefluree, linger, api):
     """Main function for the dockertest subcommand"""
     # pylint: disable=too-many-arguments
     cmd = "./fsst guesttest --target " + target + " --network " + network
@@ -1459,7 +1625,8 @@ async def dockerstart_main(tag):
     client = docker.from_env()
     name = "fsst-dockerstart-" + tag
     try:
-        client.containers.run(imagename, command, ports=ports, detach=True, auto_remove=True, name=name)
+        client.containers.run(imagename, command, ports=ports,
+                              detach=True, auto_remove=True, name=name)
         print("Started", imagename)
     except docker.errors.NotFound:
         print("ERROR:", imagename, "not found")
@@ -1701,7 +1868,7 @@ async def argparse_main():
     # pylint: enable=line-too-long
     defaults = {
         "dir" : "fluree_parts",
-        "api" : "apimap", 
+        "api" : "apimap",
         "target" : "default",
         "verboseerrors": False,
         "host" : "localhost",
@@ -1753,7 +1920,13 @@ async def argparse_main():
         "dockerdeploy": {"db", "dir", "target", "verboseerrors", "tag", "daemonize"},
         "dockerparams": {"tag"},
         "artifactdeploy": {"input:db", "host", "port", "createkey", "keyfile", "dockerfind"},
-        "guesttest": {"target", "verboseerrors", "network", "keyfile", "linger", "verbosefluree", "api"},
+        "guesttest": {"target",
+                      "verboseerrors",
+                      "network",
+                      "keyfile",
+                      "linger",
+                      "verbosefluree",
+                      "api"},
         "guestdeploy": {"db", "target", "verboseerrors", "keyfile", "linger", "verbosefluree"},
         "versioncheck": {"tag"},
         "dockerstart": {"tag"},
