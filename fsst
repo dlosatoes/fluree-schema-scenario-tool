@@ -924,13 +924,18 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                 if current_test["test"] in api_modules:
                     tester = api_modules[current_test["test"]].DomainApiTest(
                         {
-                            "auth_map": AUTHMAP,
-                            "fdb": fdb,
-                            "current_test": current_test,
-                            "current_test_index": test_index,
-                            "flureeclient": flureeclient,
-                            "database_name": dbase,
-                            "api_dir": api_dir
+                            "auth_ids": {key:value[0] for (key, value) in AUTHMAP.items()},
+                            "current" : {
+                                "database_name": dbase,
+                                "test": current_test,
+                                "test_index": test_index
+                            },
+                            "privileged" : {
+                                "auth_keys": {key:value[1] for (key, value) in AUTHMAP.items()},
+                                "fdb": fdb,
+                                "flureeclient": flureeclient,
+                                "api_dir": api_dir
+                            }
                         })
                     role_api_root = full_public_api_root.get_api_by_role(current_test["role"])
                     test_api_root = full_testing_api_root.get_api_by_role("root")
