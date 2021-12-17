@@ -15,11 +15,3 @@ docker build --no-cache -t pibara/fsst:beta . -f Dockerfile-latest-github
 docker tag pibara/fsst:beta pibara/fsst:v`grep "VERSION.*=" fsst | sed -e 's/.*= *"//' -e 's/"//'`-beta
 docker tag pibara/fsst:beta pibara/fsst:`python3 git_info_fluree_latest.py | sed -e 's/\r//'` 
 docker tag pibara/fsst:beta pibara/fsst:v`grep "VERSION.*=" fsst | sed -e 's/.*= *"//' -e 's/"//'`-`python3 git_info_fluree_latest.py | sed -e 's/\r//'`
-echo
-echo "Making snapshot from github"
-echo -n ALPHA =
-echo "fluree-snapshot-"`date --iso-8601`
-docker build --no-cache -t pibara/fsst:alpha . -f Dockerfile-fluree-master
-docker tag pibara/fsst:alpha pibara/fsst:v`grep "VERSION.*=" fsst | sed -e 's/.*= *"//' -e 's/"//'`-alpha
-docker tag pibara/fsst:alpha pibara/fsst:fluree-snapshot-`date --iso-8601`|sed  -e 's/\r//'
-docker tag pibara/fsst:alpha pibara/fsst:v`grep "VERSION.*=" fsst | sed -e 's/.*= *"//' -e 's/"//'`-fluree-snapshot-`date --iso-8601`|sed  -e 's/\r//'

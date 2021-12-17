@@ -16,7 +16,7 @@ import hashlib
 import asyncio
 import itertools
 import importlib.util
-VERSION = "0.3.1"
+VERSION = "0.4.0"
 CRYPTO_OK = True
 KEY_TO_ID_OK = True
 DOCKER_OK = True
@@ -55,6 +55,7 @@ def runs_in_docker():
     except FileNotFoundError:
         pass
     return False
+
 
 try:
     import docker
@@ -131,6 +132,7 @@ AUTHMAP = {
     "auth31": ["Tf8JAdpa3MASMLdWtcTvayHKdWBngZcWW88",
                "7881f421654c8ca1ff085b57a5ce8cd230894a30c66432e19c68f6a96d22add9"]
 }
+
 
 class FlushFile:
     """Helper class for file like objects to always flush on write"""
@@ -209,7 +211,7 @@ class FlushFile:
 
 
 sys.stdout = FlushFile(sys.stdout)  # Fix print() not always flushing when running in
-                                    #  linux docker on a windows host
+#                                     linux docker on a windows host
 
 
 def key_to_id(privkey, createid):
@@ -277,13 +279,14 @@ def query_to_clojure(obj, params):
         raise RuntimeError("Param count mismatch: " +
                            str(len(params)) +
                            " given " +
-                           str(len(parts) -1) +
+                           str(len(parts) - 1) +
                            " needed ; " +
                            data)
     # Interleave the escaped JSON parts and the parameters and put them in a (str ) clojure
     #  expression
     rval = " ".join(list(itertools.chain(*zip(["(query (str "] + params, escaped_parts))) + [") )"])
     return rval
+
 
 def query_to_clojure_previous(obj, params):
     """Convert a FlureeQL query to a clojure '(query (str ...) )' smart-function function body.
@@ -306,7 +309,7 @@ def query_to_clojure_previous(obj, params):
         If PARAM count in JSON and params length don't match
     """
     # Serialize the query, sorted keys for deterministic substitution, no pretty printing
-    obj["block"] = 1234567890987 #magic number
+    obj["block"] = 1234567890987  # magic number
     data = json.dumps(obj, sort_keys=True)
     # Split the JSON into parts using 'PARAM' as seperator
     parts = data.split("PARAM")
@@ -317,7 +320,7 @@ def query_to_clojure_previous(obj, params):
         raise RuntimeError("Param count mismatch: " +
                            str(len(params)) +
                            " given " +
-                           str(len(parts) -1) +
+                           str(len(parts) - 1) +
                            " needed ; " +
                            data)
     # Interleave the escaped JSON parts and the parameters and put them in a (str ) clojure
@@ -328,6 +331,7 @@ def query_to_clojure_previous(obj, params):
     if len(parts) != 2:
         raise RuntimeError("Problem with block insertion query_to_clojure_previous")
     return parts[0] + '" (query lastBlock) "' + parts[1]
+
 
 def expand_operation(operation, subdir, fluree_parts, verboseerrors):
     """Expand any "code_expand" or "code+from_query" in a single operation within a transaction
@@ -358,7 +362,7 @@ def expand_operation(operation, subdir, fluree_parts, verboseerrors):
         params = operation["params"]
     if "code_expand" in operation:
         # Read the file designated in the code_expand field
-        path = fluree_parts + "/" + subdir + "/" + operation["code_expand"]
+        path = os.path.join(fluree_parts, subdir, operation["code_expand"])
         with open(path) as datafile:
             data = datafile.read()
             data = re.sub(' +', ' ', data.replace("\n", " "))
@@ -373,7 +377,7 @@ def expand_operation(operation, subdir, fluree_parts, verboseerrors):
         del operation["code_expand"]
     operation2 = None
     if "code_from_query" in operation:
-        if not "block" in operation["code_from_query"] and "name" in operation and subdir != ".":
+        if "block" not in operation["code_from_query"] and "name" in operation and subdir != ".":
             operation2 = copy.deepcopy(operation)
             operation2["name"] = operation["name"] + "_previous_block"
             if ("_id" in operation2 and isinstance(operation2["_id"], str) and
@@ -442,10 +446,10 @@ async def filldb(host, port, dbase, key, keyid, transactions):
 
     """
     # pylint: disable=too-many-arguments
-    async with  aioflureedb.FlureeClient(masterkey=key,
-                                         auth_address=keyid,
-                                         host=host,
-                                         port=port) as flureeclient:
+    async with aioflureedb.FlureeClient(masterkey=key,
+                                        auth_address=keyid,
+                                        host=host,
+                                        port=port) as flureeclient:
         await flureeclient.health.ready()
         await flureeclient.new_db(db_id=dbase)
         fdb = await flureeclient[dbase]
@@ -459,6 +463,7 @@ async def filldb(host, port, dbase, key, keyid, transactions):
                     print(json.dumps(transaction, indent=4, sort_keys=True))
                     print()
                     raise exp
+
 
 def strip_comments_obj(operation):
     """ Strip all "COMMENT" key key/value pairs from a dict.
@@ -478,6 +483,7 @@ def strip_comments_obj(operation):
         if key != "COMMENT":
             rval[key] = operation[key]
     return rval
+
 
 def strip_comments_list(transaction):
     """ Strip all "COMMENT" key key/balue pairs from a list of dicts
@@ -764,11 +770,11 @@ async def run_test_scenario(database, subdir, fluree_parts, fdb, scenario):
     """
     # pylint: disable=too-many-branches,too-many-arguments
     print("  - SCENARIO:", scenario)
-    testdir = fluree_parts + "/" + subdir + "/" + scenario + "/"
+    testdir = os.path.join(fluree_parts, subdir, scenario)
     # Process the user.json file, this file contains the signing keys used in the scenario
     #  and designates what
     # signing key is used for what part of the test scenario.
-    with open(testdir + "user.json") as userfile:
+    with open(os.path.join(testdir, "user.json")) as userfile:
         users = json.load(userfile)
     yeskeys = []
     tyeskeys = []
@@ -802,21 +808,49 @@ async def run_test_scenario(database, subdir, fluree_parts, fdb, scenario):
     #
     # Prepare transactions, these should at least create the users and give them the
     #  apropriate roles
-    await process_fluree_testfile(database, subdir, fluree_parts, fdb, testdir + "prepare.json")
+    await process_fluree_testfile(database,
+                                  subdir,
+                                  fluree_parts,
+                                  fdb,
+                                  os.path.join(testdir, "prepare.json"))
     # Run all yes queries, these should succeed with non empty results.
-    await process_fluree_testfile(database, subdir, fluree_parts, fdb, testdir + "yes.json",
-                                  keys=yeskeys, query=True)
+    await process_fluree_testfile(database,
+                                  subdir,
+                                  fluree_parts,
+                                  fdb,
+                                  os.path.join(testdir, "yes.json"),
+                                  keys=yeskeys,
+                                  query=True)
     # Run all no queries, these should fail with empty results.
-    await process_fluree_testfile(database, subdir, fluree_parts, fdb, testdir + "no.json",
-                                  succeed=False, keys=nokeys, query=True)
+    await process_fluree_testfile(database,
+                                  subdir,
+                                  fluree_parts,
+                                  fdb,
+                                  os.path.join(testdir, "no.json"),
+                                  succeed=False,
+                                  keys=nokeys,
+                                  query=True)
     # Run all yes transactions, these should succeed without exceptions
-    await process_fluree_testfile(database, subdir, fluree_parts, fdb,
-                                  testdir + "tyes.json", keys=tyeskeys)
+    await process_fluree_testfile(database,
+                                  subdir,
+                                  fluree_parts,
+                                  fdb,
+                                  os.path.join(testdir, "tyes.json"),
+                                  keys=tyeskeys)
     # Run all no transactions, these should fail with exceptions from aioflureedb
-    await process_fluree_testfile(database, subdir, fluree_parts, fdb,
-                                  testdir + "tno.json", succeed=False, keys=tnokeys)
+    await process_fluree_testfile(database,
+                                  subdir,
+                                  fluree_parts,
+                                  fdb,
+                                  os.path.join(testdir, "tno.json"),
+                                  succeed=False,
+                                  keys=tnokeys)
     # Run cleanup transactions
-    await process_fluree_testfile(database, subdir, fluree_parts, fdb, testdir + "clean")
+    await process_fluree_testfile(database,
+                                  subdir,
+                                  fluree_parts,
+                                  fdb,
+                                  os.path.join(testdir, "cleanup.json"))
 
 
 async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api_dir, api_modules):
@@ -847,8 +881,8 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
     """
     # pylint: disable=too-many-locals, too-many-arguments
     # Fluree host context, using priviledged (root role) default key.
-    async with  aioflureedb.FlureeClient(masterkey=key, auth_address=keyid, host=host,
-                                         port=port) as flureeclient:
+    async with aioflureedb.FlureeClient(masterkey=key, auth_address=keyid, host=host,
+                                        port=port) as flureeclient:
         await flureeclient.health.ready()
         for test_index, current_test in enumerate(tests):
             coverage_treshold = current_test["coverage"]
@@ -864,7 +898,8 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
             async with fdb(key, keyid) as database:
                 await database.ready()
                 full_public_api_root = aioflureedb.FlureeDomainAPI(api_dir, database)
-                full_testing_api_root = aioflureedb.FlureeDomainAPI(api_dir + "/fsst", database)
+                full_testing_api_root = aioflureedb.FlureeDomainAPI(os.path.join(api_dir, "fsst"),
+                                                                    database)
                 # Run all the transactions in preparation to the tests
                 print(" - processing schema transaction sub-set")
                 for transaction in transactions:
@@ -924,14 +959,14 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                 if current_test["test"] in api_modules:
                     tester = api_modules[current_test["test"]].DomainApiTest(
                         {
-                            "auth_ids": {key:value[0] for (key, value) in AUTHMAP.items()},
-                            "current" : {
+                            "auth_ids": {key: value[0] for (key, value) in AUTHMAP.items()},
+                            "current": {
                                 "database_name": dbase,
                                 "test": current_test,
                                 "test_index": test_index
                             },
-                            "privileged" : {
-                                "auth_keys": {key:value[1] for (key, value) in AUTHMAP.items()},
+                            "privileged": {
+                                "auth_keys": {key: value[1] for (key, value) in AUTHMAP.items()},
                                 "fdb": fdb,
                                 "flureeclient": flureeclient,
                                 "api_dir": api_dir
@@ -957,7 +992,8 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                                                str(test_index) + " : " + str(is_ok[1]))
                     async with fdb(current_test["key"], current_test["addr"]) as user_database:
                         full_public_api = aioflureedb.FlureeDomainAPI(api_dir, user_database)
-                        full_testing_api = aioflureedb.FlureeDomainAPI(api_dir + "/fsst",
+                        full_testing_api = aioflureedb.FlureeDomainAPI(os.path.join(api_dir,
+                                                                                    "fsst"),
                                                                        user_database)
                         role_api = full_public_api.get_api_by_role(current_test["role"])
                         test_api = full_testing_api.get_api_by_role("test")
@@ -1076,6 +1112,7 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                     raise RuntimeError("No domain-API python testing module loaded for " +
                                        current_test["test"])
 
+
 async def smartfunction_test(host, port, dbase, key, keyid, subdir, transactions, fluree_parts):
     """Create a test database, initialize database with transactions up to stage and run all
        tests for stage.
@@ -1108,8 +1145,8 @@ async def smartfunction_test(host, port, dbase, key, keyid, subdir, transactions
     """
     # pylint: disable=too-many-locals, too-many-arguments
     # Fluree host context, using priviledged (root role) default key.
-    async with  aioflureedb.FlureeClient(masterkey=key, auth_address=keyid, host=host,
-                                         port=port) as flureeclient:
+    async with aioflureedb.FlureeClient(masterkey=key, auth_address=keyid, host=host,
+                                        port=port) as flureeclient:
         await flureeclient.health.ready()
         # Create the new database for our tests
         await flureeclient.new_db(db_id=dbase)
@@ -1129,7 +1166,7 @@ async def smartfunction_test(host, port, dbase, key, keyid, subdir, transactions
                     raise exp
             print(" - ok, completed", len(transactions), "transactions on", dbase)
             # Read the test scenario config file for this stage.
-            with open(fluree_parts + "/" + subdir + "/test.json") as testscenariosfile:
+            with open(os.path.join(fluree_parts, subdir, "test.json")) as testscenariosfile:
                 testscenarios = json.load(testscenariosfile)
             print(" - running test scenarios")
             # Run all test scenarios.
@@ -1171,8 +1208,8 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
     # pylint: disable=too-many-locals,too-many-arguments
     maxblock = [expand_operation({
         "_id": "_fn$lastblock",
-        "name" : "lastBlock",
-        "doc" : "Get the number of the last known block on the ledger",
+        "name": "lastBlock",
+        "doc": "Get the number of the last known block on the ledger",
         "code_from_query": {
             "select": "?maxBlock",
             "where": [
@@ -1188,7 +1225,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
         # Build.json contains the different build targets and lists their components.
         # Fetch the specified target from this file.
         try:
-            with open(fluree_parts + "/build.json") as buildfile:
+            with open(os.path.join(fluree_parts, "build.json")) as buildfile:
                 build = json.load(buildfile)
                 if target in build:
                     build = build[target]
@@ -1207,8 +1244,8 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
             if output or notest:
                 # If output or notest, we dont run any tests, we just fill the expanded list
                 #  with expanded transactions.
-                main = fluree_parts + "/" + subdir + "/main.json"
-                noexpand = fluree_parts + "/" + subdir + ".json"
+                main = os.path.join(fluree_parts, subdir, "main.json")
+                noexpand = os.path.join(fluree_parts, subdir + ".json")
                 if os.path.isfile(noexpand):
                     with open(noexpand) as nefile:
                         nelist = json.load(nefile)
@@ -1233,7 +1270,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
             else:
                 # Otherwise, if notest is false and the stage has a test.json,
                 #  we run our inner loop for testing
-                testfile = fluree_parts + "/" + subdir + "/test.json"
+                testfile = os.path.join(fluree_parts, subdir, "test.json")
                 if os.path.isfile(testfile) and not notest:
                     testcount += 1
                     # Make up a database name for our test, using network and stage name.
@@ -1247,8 +1284,8 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                     print("Going through first", maxstage+1, "stages")
                     for subdir2 in build[:maxstage+1]:
                         print("  -", subdir2)
-                        main = fluree_parts + "/" + subdir2 + "/main.json"
-                        noexpand = fluree_parts + "/" + subdir2 + ".json"
+                        main = os.path.join(fluree_parts, subdir2, "main.json")
+                        noexpand = os.path.join(fluree_parts, subdir2 + ".json")
                         if os.path.isfile(noexpand):
                             with open(noexpand) as nefile:
                                 nelist = json.load(nefile)
@@ -1282,16 +1319,20 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                                              fluree_parts)
                 # If notest is false and the stage has a domain.json,
                 #  we run domain-API tests
-                testfile = fluree_parts + "/" + subdir + "/domain.json"
+                testfile = os.path.join(fluree_parts, subdir, "domain.json")
                 if os.path.isfile(testfile) and not notest:
                     with open(testfile) as testfil:
                         testsets = json.load(testfil)
-                    if (os.path.isdir(api) and os.path.isdir(api + "/fsst") and
-                            os.path.isdir(api + "/roles") and os.path.isdir(api + "/fsst/tests")):
+                    if (os.path.isdir(api) and
+                            os.path.isdir(os.path.join(api, "fsst")) and
+                            os.path.isdir(os.path.join(api, "roles")) and
+                            os.path.isdir(os.path.join(api, "fsst", "tests"))):
                         apimap_modules = dict()
-                        for modname in [fil[:-3] for fil in os.listdir(api + "/fsst/tests") if
+                        for modname in [fil[:-3] for fil in os.listdir(os.path.join(api,
+                                                                                    "fsst",
+                                                                                    "tests")) if
                                         fil[-3:] == ".py"]:
-                            modpath = api + "/fsst/tests/" + modname + ".py"
+                            modpath = os.path.join(api, "fsst", "tests", modname + ".py")
                             spec = importlib.util.spec_from_file_location(modname, modpath)
                             apimap_modules[modname] = importlib.util.module_from_spec(spec)
                             spec.loader.exec_module(apimap_modules[modname])
@@ -1300,10 +1341,10 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                             else:
                                 print("NOTICE: Loaded Domain-API testing module", modname)
                         full_coverage = dict()
-                        for role in [fil[:-5] for fil in os.listdir(api + "/roles") if
+                        for role in [fil[:-5] for fil in os.listdir(os.path.join(api, "roles")) if
                                      fil[-5:] == ".json"]:
                             full_coverage[role] = set()
-                            with open(api + "/roles/" + role + ".json") as rolefile:
+                            with open(os.path.join(api, "roles", role + ".json")) as rolefile:
                                 role_data = json.load(rolefile)
                             for key in role_data.keys():
                                 for val in role_data[key]:
@@ -1392,7 +1433,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                                     test_list.append(test_obj)
                                 else:
                                     print("WARNING: role", role, " defined in",
-                                          testfile, "not defined in", api + "/roles")
+                                          testfile, "not defined in", os.path.join(api, "roles"))
                             else:
                                 print("WARNING: test in", testfile,
                                       "without api_role, skipping tests")
@@ -1428,14 +1469,16 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
         print(str(exp))
         sys.exit(1)
 
+
 def get_running_docker(client, tag):
     """Get the running docker"""
     name = "pibara/fsst:" + tag
     for container in client.containers.list():
-        for ttag in  container.image.attrs["RepoTags"]:
+        for ttag in container.image.attrs["RepoTags"]:
             if ttag == name:
                 return container
     return None
+
 
 def get_container_info(container):
     """Get host port and create key from docker"""
@@ -1452,6 +1495,7 @@ def get_container_info(container):
         createkey = command_result.output.decode()
     return hostport, createkey
 
+
 def get_from_docker(tag):
     """Retreive the host port and the createkey from a running fsst docker image"""
     client = docker.from_env()
@@ -1461,6 +1505,7 @@ def get_from_docker(tag):
         sys.exit(1)
     hostport, createkey = get_container_info(container)
     return hostport, createkey
+
 
 def run_in_docker(tag, command, directory, daemonize, expose, api="apimap"):
     """Run a given command in a new docker container"""
@@ -1522,6 +1567,7 @@ def run_in_docker(tag, command, directory, daemonize, expose, api="apimap"):
         container.stop()
         print("Container stopped after keyboard interrupt")
 
+
 async def get_createkey_and_port(createkey, keyfile, dockerfind,
                                  port, startfluree, verbosefluree, createid=""):
     """Get the create-key and fluree port using the relevant commandline info"""
@@ -1568,6 +1614,7 @@ async def get_createkey_and_port(createkey, keyfile, dockerfind,
     print("         --dockerfind")
     sys.exit(1)
 
+
 async def artifact_main(output, directory, target, verbose_errors):
     """Main function for the artifact sub command"""
     await fluree_main(notest=False,
@@ -1581,6 +1628,7 @@ async def artifact_main(output, directory, target, verbose_errors):
                       fluree_parts=directory,
                       verboseerrors=verbose_errors)
     return
+
 
 async def test_main(directory, target, verboseerrors, host, port,
                     network, createkey, createid, api):
@@ -1599,6 +1647,7 @@ async def test_main(directory, target, verboseerrors, host, port,
                       api=api)
     return
 
+
 async def deploy_main(directory, target, verboseerrors, host, port, network, createkey, createid):
     """Main function for the deploy subcommand"""
     # pylint: disable=too-many-arguments
@@ -1614,6 +1663,7 @@ async def deploy_main(directory, target, verboseerrors, host, port, network, cre
                       verboseerrors=verboseerrors)
     return
 
+
 async def dockertest_main(directory, target, verboseerrors,
                           network, tag, verbosefluree, linger, api):
     """Main function for the dockertest subcommand"""
@@ -1626,6 +1676,7 @@ async def dockertest_main(directory, target, verboseerrors,
     if linger:
         cmd += " --linger"
     return run_in_docker(tag, cmd, directory, False, linger, api=api)
+
 
 async def dockerstart_main(tag):
     """Main function for the dockerstart subcommand"""
@@ -1646,6 +1697,7 @@ async def dockerstart_main(tag):
         print("ERROR:", imagename, "not found")
     return
 
+
 async def dockerstop_main(tag):
     """Main function for the dockerstop subcommand"""
     lookfor = "pibara/fsst:" + tag
@@ -1656,6 +1708,7 @@ async def dockerstop_main(tag):
         print("Stopping", lookfor)
     else:
         print("ERROR: no running instance of", lookfor, "found")
+
 
 async def versioncheck_main(tag):
     """Main function for the versioncheck subcommand"""
@@ -1712,12 +1765,13 @@ async def dockerdeploy_main(directory, target, verboseerrors, dbase, tag, verbos
     """Main function for the dockerdeploy subcommand"""
     # pylint: disable=too-many-arguments
     cmd = "./fsst guestdeploy " + dbase + " --target " + target + \
-            " --linger"
+          " --linger"
     if verboseerrors:
         cmd += " --verboseerrors"
     if verbosefluree or not daemonize:
         cmd += " --verbosefluree"
     return run_in_docker(tag, cmd, directory, daemonize, True)
+
 
 async def guesttest_main(target, verboseerrors, network, linger, createkey, createid):
     """Main function for the guesttest subcommand"""
@@ -1741,6 +1795,7 @@ async def guesttest_main(target, verboseerrors, network, linger, createkey, crea
             count += 1
             print('LINGER', count, flush=True)
     return
+
 
 async def artifactdeploy_main(inputfile, dbase, host, port, createkey, keyid):
     # pylint: disable=too-many-arguments
@@ -1767,10 +1822,10 @@ async def artifactdeploy_main(inputfile, dbase, host, port, createkey, keyid):
                 print("ERROR: Artifact file should contain a JSON array of arrays of dicts:",
                       inputfile)
                 sys.exit(1)
-    async with  aioflureedb.FlureeClient(masterkey=createkey,
-                                         auth_address=keyid,
-                                         host=host,
-                                         port=port) as flureeclient:
+    async with aioflureedb.FlureeClient(masterkey=createkey,
+                                        auth_address=keyid,
+                                        host=host,
+                                        port=port) as flureeclient:
         await flureeclient.health.ready()
         # Create the new database for our tests
         try:
@@ -1793,6 +1848,7 @@ async def artifactdeploy_main(inputfile, dbase, host, port, createkey, keyid):
                     sys.exit(1)
     print("Deployed", inputfile, "to", dbase, "on", host)
     return
+
 
 async def dockerparams_main(tag):
     """Main function for the dockerparams subcommand"""
@@ -1817,6 +1873,7 @@ async def dockerparams_main(tag):
     print("CREATEKEY:", createkey)
     print("PORT:", port)
 
+
 async def guestdeploy_main(target, verboseerrors, dbase, createkey, createid):
     """Main function for the guestdeploy subcommand"""
     prt = 8090
@@ -1837,6 +1894,114 @@ async def guestdeploy_main(target, verboseerrors, dbase, createkey, createid):
         await asyncio.sleep(30)
         count += 1
         print('LINGER', count, flush=True)
+
+
+def apiartifact_main(api, output_js, roles, output, force):
+    # pylint: disable=too-many-branches, too-many-statements, too-many-locals
+    """Main function of the apiartifact subcommand"""
+    testdirs = [api]
+    for subdir in ["roles", "query", "transaction"]:
+        testdirs.append(os.path.join(api, subdir))
+    for path in testdirs:
+        if not os.path.isdir(path):
+            print("ERROR: Required dir doesn't exist or isn't a directory:", path)
+            sys.exit(2)
+    rolesdir = os.path.join(api, "roles")
+    if roles == "ALL":
+        my_roles = []
+        for filename in os.listdir(rolesdir):
+            filepath = os.path.join(rolesdir, filename)
+            if os.path.isfile(filepath):
+                name, ext = filename.split(".")
+                if ext.lower() == "json":
+                    my_roles.append(name)
+
+    else:
+        my_roles = roles.split(",")
+    desired = dict()
+    desired["roles"] = set(my_roles)
+    desired["queries"] = set()
+    desired["transactions"] = set()
+    found_roles = set()
+    for filename in os.listdir(rolesdir):
+        filepath = os.path.join(rolesdir, filename)
+        if os.path.isfile(filepath):
+            name, ext = filename.split(".")
+            if ext.lower() == "json" and name in desired["roles"]:
+                found_roles.add(name)
+                with open(filepath) as infil:
+                    obj = json.load(infil)
+                    if "queries" in obj:
+                        for query in obj["queries"]:
+                            desired["queries"].add(query)
+                    if "transactions" in obj:
+                        for query in obj["transactions"]:
+                            desired["transactions"].add(query)
+    if bool(desired["roles"] - found_roles):
+        print("ERROR: One or more designated roles not found in domain-API definition")
+        for role in desired["roles"] - found_roles:
+            print("  -", role)
+        sys.exit(3)
+    if os.path.exists(output):
+        if not (os.path.isfile(output) and force):
+            print(output, "file already exists:", output)
+            sys.exit(2)
+    obj = dict()
+    obj["roles"] = dict()
+    obj["query"] = dict()
+    obj["xform"] = dict()
+    obj["transaction"] = dict()
+    obj["operation"] = dict()
+    # pylint: disable=too-many-nested-blocks
+    for subdir in ["roles", "query", "transaction"]:
+        fulldir = os.path.join(api, subdir)
+        if os.path.isdir(fulldir):
+            for filename in os.listdir(fulldir):
+                filepath = os.path.join(fulldir, filename)
+                if os.path.isfile(filepath):
+                    name, ext = filename.split(".")
+                    if ext.lower() == "json":
+                        # pylint: disable=too-many-boolean-expressions
+                        if (subdir == "query" and
+                                name in desired["queries"] or
+                                subdir == "transaction" and
+                                name in desired["transactions"] or
+                                subdir == "roles" and
+                                name in desired["roles"]):
+                            with open(filepath) as infil:
+                                obj[subdir][name] = json.load(infil)
+                                if subdir == "transaction":
+                                    obj["operation"][name] = dict()
+                                if subdir == "query" and name not in obj["xform"]:
+                                    obj["xform"][name] = "$"
+                    elif (subdir == "query" and
+                          ext.lower() == "xform" and
+                          name in desired["queries"]):
+                        with open(filepath) as infil:
+                            obj["xform"][name] = infil.read()
+                elif (os.path.isdir(filepath) and
+                      subdir == "transaction" and
+                      filename in desired["transactions"]):
+                    obj["operation"][filename] = dict()
+                    subsubdir = os.path.join(fulldir, filename)
+                    for subfilename in os.listdir(subsubdir):
+                        subfilepath = os.path.join(subsubdir, subfilename)
+                        if os.path.isfile(subfilepath):
+                            name2, _ = subfilename.split(".")
+                            if ext.lower() == "json":
+                                with open(subfilepath) as infil2:
+                                    if name2 == "default":
+                                        obj["transaction"][filename] = json.load(infil2)
+                                    else:
+                                        obj["operation"][filename][name2] = json.load(infil2)
+    with open(output, "w") as outfil:
+        if output_js:
+            outfil.write("export let domain_api = ")
+        json.dump(obj, outfil, indent=4, sort_keys=True)
+        if output_js:
+            outfil.write(";")
+    print("Created", output)
+
 
 async def argparse_main():
     # pylint: disable=too-many-statements,too-many-branches,too-many-locals
@@ -1860,6 +2025,7 @@ async def argparse_main():
         "version": "Get the version of the fsst tool",
         "dockerstart": "Start a flureeDB only instance of the fsst docker image, available on localhost:8090",
         "dockerstop": "Stop any running instance of the fsst docker image with the given tag",
+        "apiartifact": "Create a single-file domain-API JSON artifact",
         "dir": "Directory containing build tree (default fluree_parts)",
         "api": "Directory containing domain-API mappings (default apimap)",
         "target": "FlureeDB, build target as defined in build.json ('default' if undefined)",
@@ -1869,32 +2035,38 @@ async def argparse_main():
         "network": "FlureeDB network name. (generate if unspecified)",
         "createkey": "FlureeDB signing key for creation (alternative for --keyfile or --dockerfind)",
         "createid": "The ID of the FlureeDB signing key for creation. Use in combination with createkey on systems without bitcoinlib support",
-        "keyfile": "File containing FlureeDB signing key for creation (alternative for --createkey or --dockerfind)",
-        "dockerfind": "Extract FlureeDB signing key for creation from running docker (alternative for --createkey or --keyfile)",
+        "keyfile": "File containing FlureeDB signing key for creation",
+        "dockerfind": "Extract FlureeDB signing key for creation from running docker",
         "linger": "Keep docker/FlureeDB running after tests have completed",
         "tag": "Tag to use for fsst docker image.",
         "verbosefluree": "Dont redirect flureedb stdout/stderr to /dev/null",
         "daemonize": "Run docker/FlureeDB docker as a daemon process",
         "output": "Output JSON file",
         "input": "Input JSON file",
-        "db": "Name for the new database to deploy to."
+        "db": "Name for the new database to deploy to.",
+        "js": "Output a JavaScript module file instead of a JSON file",
+        "roles": "Comma seperated list of roles to include in the domain-API artifact",
+        "force": "Overwrite output file if it already exists"
     }
     # pylint: enable=line-too-long
     defaults = {
-        "dir" : "fluree_parts",
-        "api" : "apimap",
-        "target" : "default",
+        "dir": "fluree_parts",
+        "api": "apimap",
+        "target": "default",
         "verboseerrors": False,
-        "host" : "localhost",
-        "port" : "8090",
-        "network" : netname,
-        "createkey" : None,
-        "keyfile" : None,
-        "dockerfind" : "beta",
+        "js": False,
+        "host": "localhost",
+        "port": "8090",
+        "network": netname,
+        "createkey": None,
+        "keyfile": None,
+        "dockerfind": "beta",
         "linger": False,
         "tag": "beta",
         "verbosefluree": False,
-        "daemonize": False
+        "daemonize": False,
+        "roles": "ALL",
+        "force": False
     }
     if not KEY_TO_ID_OK:
         defaults["createid"] = None
@@ -1945,7 +2117,8 @@ async def argparse_main():
         "versioncheck": {"tag"},
         "dockerstart": {"tag"},
         "dockerstop": {"tag"},
-        "version": {}
+        "version": {},
+        "apiartifact": {"js", "api", "roles", "force", "output"}
     }
     if not KEY_TO_ID_OK:
         argsmap["test"].add("createid")
@@ -1961,7 +2134,8 @@ async def argparse_main():
                                "dockerdeploy",
                                "guesttest",
                                "guestdeploy",
-                               "version"]
+                               "version",
+                               "apiartifact"]
             else:
                 subcommands = ["artifact",
                                "test",
@@ -1973,7 +2147,8 @@ async def argparse_main():
                                "version",
                                "versioncheck",
                                "dockerstart",
-                               "dockerstop"]
+                               "dockerstop",
+                               "apiartifact"]
         else:
             if runs_in_docker():
                 subcommands = ["artifact",
@@ -1981,12 +2156,14 @@ async def argparse_main():
                                "deploy",
                                "guesttest",
                                "guestdeploy",
-                               "version"]
+                               "version",
+                               "apiartifact"]
             else:
                 subcommands = ["artifact",
                                "test",
                                "deploy",
-                               "version"]
+                               "version",
+                               "apiartifact"]
     else:
         subcommands = ["artifact"]
     for subcommand in subcommands:
@@ -2011,7 +2188,10 @@ async def argparse_main():
             "output",
             "input",
             "db",
-            "daemonize"
+            "daemonize",
+            "js",
+            "roles",
+            "force"
         }
         if not KEY_TO_ID_OK:
             todo.add("createid")
@@ -2020,7 +2200,7 @@ async def argparse_main():
                 sa_help = helps[subarg]
                 if subarg in defaults:
                     sa_default = defaults[subarg]
-                    if not sa_default is None and not sa_default:
+                    if sa_default is not None and not sa_default:
                         parsers[subcommand].add_argument('--' + subarg,
                                                          action='store_true',
                                                          help=sa_help)
@@ -2114,6 +2294,8 @@ async def argparse_main():
         await dockerstart_main(args.tag)
     elif args.subcommand == "dockerstop":
         await dockerstop_main(args.tag)
+    elif args.subcommand == "apiartifact":
+        apiartifact_main(args.api, args.js, args.roles, args.output, args.force)
     else:
         print("ERROR: impossible subcommand:", args.subcommand)
 
