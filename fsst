@@ -1951,7 +1951,6 @@ def apiartifact_main(api, output_js, roles, output, force):
     obj["query"] = dict()
     obj["xform"] = dict()
     obj["transaction"] = dict()
-    obj["operation"] = dict()
     # pylint: disable=too-many-nested-blocks
     for subdir in ["roles", "query", "transaction"]:
         fulldir = os.path.join(api, subdir)
@@ -1970,8 +1969,6 @@ def apiartifact_main(api, output_js, roles, output, force):
                                 name in desired["roles"]):
                             with open(filepath) as infil:
                                 obj[subdir][name] = json.load(infil)
-                                if subdir == "transaction":
-                                    obj["operation"][name] = dict()
                                 if subdir == "query" and name not in obj["xform"]:
                                     obj["xform"][name] = "$"
                     elif (subdir == "query" and
@@ -1982,7 +1979,6 @@ def apiartifact_main(api, output_js, roles, output, force):
                 elif (os.path.isdir(filepath) and
                       subdir == "transaction" and
                       filename in desired["transactions"]):
-                    obj["operation"][filename] = dict()
                     subsubdir = os.path.join(fulldir, filename)
                     for subfilename in os.listdir(subsubdir):
                         subfilepath = os.path.join(subsubdir, subfilename)
@@ -1993,7 +1989,7 @@ def apiartifact_main(api, output_js, roles, output, force):
                                     if name2 == "default":
                                         obj["transaction"][filename] = json.load(infil2)
                                     else:
-                                        obj["operation"][filename][name2] = json.load(infil2)
+                                        obj["transaction"][filename + "/" + name2]  = json.load(infil2)
     with open(output, "w") as outfil:
         if output_js:
             outfil.write("export let domain_api = ")
