@@ -9,14 +9,9 @@ persistent=no
 
 # List of plugins (as comma separated values of python modules names) to load,
 # usually to register additional checkers.
-load-plugins=pylint.extensions.docparams,pylint.extensions.docstyle,pylint.extensions.check_elif,pylint.extensions.redefined_variable_type
+load-plugins=pylint.extensions.mccabe,pylint.extensions.check_elif,pylint.extensions.redefined_variable_type
 
 # Settings for above plugins:
-accept-no-param-doc=no
-accept-no-raise-doc=no
-accept-no-return-doc=no
-accept-no-yields-doc=no
-default-docstring-type=numpy
 max-try-statements=1
 max-complexity=14
 # Use multiple processes to speed up Pylint.
@@ -52,7 +47,8 @@ optimize-ast=no
 # R0205 - Inheritance from object
 # R0201 - Method could be a function / no-self-use
 # C0301 - Lines to long, this is already handled by pycodestyle
-disable=R0903,R0205,R0201,C0301
+# C0114 - Missing module docstring
+disable=R0903,R0205,R0201,C0301,C0114
 
 
 
