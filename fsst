@@ -1977,7 +1977,8 @@ def apiartifact_main(api, output_js, roles, output, force):
                                     if name2 == "default":
                                         obj["transaction"][filename] = json.load(infil2)
                                     else:
-                                        obj["transaction"][filename + "/" + name2]  = json.load(infil2)
+                                        obj["transaction"][filename + "/" + name2] = \
+                                                json.load(infil2)
     with open(output, "w") as outfil:
         if output_js:
             outfil.write("export let domain_api = ")
