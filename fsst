@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Simple script for compiling a fluree transaction init file, and for running
     basic tests with it"""
-# pylint: disable=too-many-lines, unspecified-encoding
+# pylint: disable=too-many-lines, unspecified-encoding, too-complex
 import os
 import os.path
 import re
@@ -1036,25 +1036,24 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                                     if is_ok == should_succeed:
                                         print("     res=", is_ok, "EXPECTED")
                                         coverage += 1
-                                    else:
-                                        if warn_only:
-                                            print("WARNING: res=", is_ok, "NOT EXPECTED")
-                                        else:
-                                            print("ERROR: res=", is_ok, "NOT EXPECTED")
-                                            raise RuntimeError(
-                                                "Unexpected result from method test for " +
-                                                method + " at sub-test " + str(test_index))
-                                elif is_ok[0] == should_succeed:
-                                    print("     res=", is_ok[0], "EXPECTED", is_ok[1])
-                                    coverage += 1
-                                else:
-                                    if warn_only:
+                                    elif warn_only:
                                         print("WARNING: res=", is_ok, "NOT EXPECTED")
                                     else:
                                         print("ERROR: res=", is_ok, "NOT EXPECTED")
-                                        raise RuntimeError("Unexpected result from method test for"
-                                                           + " " + method + " at sub-test " +
-                                                           str(test_index))
+                                        raise RuntimeError(
+                                            "Unexpected result from method test for " +
+                                            method + " at sub-test " + str(test_index)
+                                        )
+                                elif is_ok[0] == should_succeed:
+                                    print("     res=", is_ok[0], "EXPECTED", is_ok[1])
+                                    coverage += 1
+                                elif warn_only:
+                                    print("WARNING: res=", is_ok, "NOT EXPECTED")
+                                else:
+                                    print("ERROR: res=", is_ok, "NOT EXPECTED")
+                                    raise RuntimeError("Unexpected result from method test for"
+                                                       + " " + method + " at sub-test " +
+                                                       str(test_index))
                         if getattr(tester, 'cleanup_user', None) is not None:
                             print(" + Running cleanup_user")
                             # pylint: disable=broad-except
@@ -1669,7 +1668,7 @@ async def dockertest_main(directory, target, verboseerrors,
 async def dockerstart_main(tag):
     """Main function for the dockerstart subcommand"""
     imagename = "pibara/fsst:" + tag
-    command = "/bin/bash /usr/src/fsst/fluree_start.sh  -Dfdb-api-port=8090"
+    cmd = "/bin/bash /usr/src/fsst/fluree_start.sh  -Dfdb-api-port=8090"
     ports = {}
     if tag == "stable":
         ports["8090/tcp"] = 8090
@@ -1678,7 +1677,7 @@ async def dockerstart_main(tag):
     client = docker.from_env()
     name = "fsst-dockerstart-" + tag
     try:
-        client.containers.run(imagename, command, ports=ports,
+        client.containers.run(imagename, cmd, ports=ports,
                               detach=True, auto_remove=True, name=name)
         print("Started", imagename)
     except docker.errors.NotFound:
@@ -2134,21 +2133,20 @@ async def argparse_main():
                                "dockerstart",
                                "dockerstop",
                                "apiartifact"]
+        elif runs_in_docker():
+            subcommands = ["artifact",
+                           "test",
+                           "deploy",
+                           "guesttest",
+                           "guestdeploy",
+                           "version",
+                           "apiartifact"]
         else:
-            if runs_in_docker():
-                subcommands = ["artifact",
-                               "test",
-                               "deploy",
-                               "guesttest",
-                               "guestdeploy",
-                               "version",
-                               "apiartifact"]
-            else:
-                subcommands = ["artifact",
-                               "test",
-                               "deploy",
-                               "version",
-                               "apiartifact"]
+            subcommands = ["artifact",
+                           "test",
+                           "deploy",
+                           "version",
+                           "apiartifact"]
     else:
         subcommands = ["artifact"]
     for subcommand in subcommands:
