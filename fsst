@@ -22,6 +22,7 @@ KEY_TO_ID_OK = True
 DOCKER_OK = True
 try:
     import aioflureedb
+    from aioflureedb.domain_api import FlureeDomainAPI
 except ModuleNotFoundError:
     print("WARNING: - aioflureedb python lib not found.")
     CRYPTO_OK = False
@@ -883,8 +884,8 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
             # Database context
             async with fdb(key, keyid) as database:
                 await database.ready()
-                full_public_api_root = aioflureedb.FlureeDomainAPI(api_dir, database)
-                full_testing_api_root = aioflureedb.FlureeDomainAPI(os.path.join(api_dir, "fsst"),
+                full_public_api_root = FlureeDomainAPI(api_dir, database)
+                full_testing_api_root = FlureeDomainAPI(os.path.join(api_dir, "fsst"),
                                                                     database)
                 # Run all the transactions in preparation to the tests
                 print(" - processing schema transaction sub-set")
@@ -977,8 +978,8 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                             raise RuntimeError("The prepare_root failed for test at index " +
                                                str(test_index) + " : " + str(is_ok[1]))
                     async with fdb(current_test["key"], current_test["addr"]) as user_database:
-                        full_public_api = aioflureedb.FlureeDomainAPI(api_dir, user_database)
-                        full_testing_api = aioflureedb.FlureeDomainAPI(os.path.join(api_dir,
+                        full_public_api = FlureeDomainAPI(api_dir, user_database)
+                        full_testing_api = FlureeDomainAPI(os.path.join(api_dir,
                                                                                     "fsst"),
                                                                        user_database)
                         role_api = full_public_api.get_api_by_role(current_test["role"])
