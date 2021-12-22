@@ -26,4 +26,4 @@ jobs:
     - name: Analysing the code with pylint
       run: |
         pylint fsst
-        pycodestyle fsst
+        pycodestyle --max-line-length=128 fsst
