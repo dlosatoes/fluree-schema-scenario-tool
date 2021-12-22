@@ -2018,7 +2018,7 @@ async def argparse_main():
         "port": "FlureeDB port. (default 8090)",
         "network": "FlureeDB network name. (generate if unspecified)",
         "createkey": "FlureeDB signing key for creation (alternative for --keyfile or --dockerfind)",
-        "createid": "The ID of the FlureeDB signing key for creation. Use in combination with createkey on systems without bitcoinlib support",
+        "createid": "Use in combination with createkey on systems without bitcoinlib support",
         "keyfile": "File containing FlureeDB signing key for creation",
         "dockerfind": "Extract FlureeDB signing key for creation from running docker",
         "linger": "Keep docker/FlureeDB running after tests have completed",
