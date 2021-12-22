@@ -981,7 +981,7 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                         full_public_api = FlureeDomainAPI(api_dir, user_database)
                         full_testing_api = FlureeDomainAPI(os.path.join(api_dir,
                                                                         "fsst"),
-                                                                        user_database)
+                                                           user_database)
                         role_api = full_public_api.get_api_by_role(current_test["role"])
                         test_api = full_testing_api.get_api_by_role("test")
                         print(" + Using Domain-API test module for test user :",
