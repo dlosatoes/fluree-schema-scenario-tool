@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Simple script for compiling a fluree transaction init file, and for running
     basic tests with it"""
-# pylint: disable=too-many-lines
+# pylint: disable=too-many-lines, unspecified-encoding
 import os
 import os.path
 import re
@@ -16,7 +16,7 @@ import hashlib
 import asyncio
 import itertools
 import importlib.util
-VERSION = "0.4.1"
+VERSION = "0.4.2"
 CRYPTO_OK = True
 KEY_TO_ID_OK = True
 DOCKER_OK = True
@@ -411,7 +411,7 @@ def expand_transaction(transaction, subdir, fluree_parts, verboseerrors):
     str
         Potentially expanded version of the supplied transaction
     """
-    rval = list()
+    rval = []
     for operation in transaction:
         op1, op2 = expand_operation(operation, subdir, fluree_parts, verboseerrors)
         rval.append(op1)
@@ -478,7 +478,7 @@ def strip_comments_obj(operation):
     dict
         A copy of the supplied dict without any COMMENT key key/value data.
     """
-    rval = dict()
+    rval = {}
     for key in operation.keys():
         if key != "COMMENT":
             rval[key] = operation[key]
@@ -499,7 +499,7 @@ def strip_comments_list(transaction):
         A copy of the supplied transaction without any COMMENT key/value data in any of the
         operations.
     """
-    rval = list()
+    rval = []
     for operation in transaction:
         rval.append(strip_comments_obj(operation))
     return rval
@@ -643,7 +643,7 @@ async def do_query(database, query, succeed):
         print()
         raise exp
     # Strip all _id only values  from the response
-    response = list()
+    response = []
     for obj in response0:
         if "_id" in obj:
             del obj["_id"]
@@ -665,8 +665,6 @@ async def do_query(database, query, succeed):
 
 
 async def process_fluree_testfile(database,
-                                  subdir,
-                                  fluree_parts,
                                   fdb,
                                   transactionfile,
                                   succeed=True,
@@ -809,22 +807,16 @@ async def run_test_scenario(database, subdir, fluree_parts, fdb, scenario):
     # Prepare transactions, these should at least create the users and give them the
     #  apropriate roles
     await process_fluree_testfile(database,
-                                  subdir,
-                                  fluree_parts,
                                   fdb,
                                   os.path.join(testdir, "prepare.json"))
     # Run all yes queries, these should succeed with non empty results.
     await process_fluree_testfile(database,
-                                  subdir,
-                                  fluree_parts,
                                   fdb,
                                   os.path.join(testdir, "yes.json"),
                                   keys=yeskeys,
                                   query=True)
     # Run all no queries, these should fail with empty results.
     await process_fluree_testfile(database,
-                                  subdir,
-                                  fluree_parts,
                                   fdb,
                                   os.path.join(testdir, "no.json"),
                                   succeed=False,
@@ -832,23 +824,17 @@ async def run_test_scenario(database, subdir, fluree_parts, fdb, scenario):
                                   query=True)
     # Run all yes transactions, these should succeed without exceptions
     await process_fluree_testfile(database,
-                                  subdir,
-                                  fluree_parts,
                                   fdb,
                                   os.path.join(testdir, "tyes.json"),
                                   keys=tyeskeys)
     # Run all no transactions, these should fail with exceptions from aioflureedb
     await process_fluree_testfile(database,
-                                  subdir,
-                                  fluree_parts,
                                   fdb,
                                   os.path.join(testdir, "tno.json"),
                                   succeed=False,
                                   keys=tnokeys)
     # Run cleanup transactions
     await process_fluree_testfile(database,
-                                  subdir,
-                                  fluree_parts,
                                   fdb,
                                   os.path.join(testdir, "cleanup.json"))
 
@@ -1019,7 +1005,7 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                             subtest_name = subtest[0]
                             should_succeed = subtest[1]
                             warn_only = subtest[2]
-                            methods = list()
+                            methods = []
                             go_on = True
                             idx = 0
                             while go_on:
@@ -1220,7 +1206,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
         }
     }, ".", fluree_parts, False)[0]]
     try:
-        expanded = list()
+        expanded = []
         expanded.append(maxblock)
         # Build.json contains the different build targets and lists their components.
         # Fetch the specified target from this file.
@@ -1250,7 +1236,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                     with open(noexpand) as nefile:
                         nelist = json.load(nefile)
                     for transaction in nelist:
-                        out_transaction = list()
+                        out_transaction = []
                         for operation in transaction:
                             if (verboseerrors and "_id" in operation and "id" in operation
                                     and operation["_id"].startswith("_rule")
@@ -1276,7 +1262,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                     # Make up a database name for our test, using network and stage name.
                     database = network + "/" + subdir
                     database = "-".join(database.lower().split("_"))
-                    expanded2 = list()
+                    expanded2 = []
                     expanded2.append(maxblock)
                     print("- Database:", database)
                     print(" - collecting transactions from build subdirs")
@@ -1290,7 +1276,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                             with open(noexpand) as nefile:
                                 nelist = json.load(nefile)
                             for transaction in nelist:
-                                transaction_out = list()
+                                transaction_out = []
                                 for operation in transaction:
                                     if (verboseerrors and "_id" in operation and "id" in operation
                                             and operation["_id"].startswith("_rule")
@@ -1327,7 +1313,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                             os.path.isdir(os.path.join(api, "fsst")) and
                             os.path.isdir(os.path.join(api, "roles")) and
                             os.path.isdir(os.path.join(api, "fsst", "tests"))):
-                        apimap_modules = dict()
+                        apimap_modules = {}
                         for modname in [fil[:-3] for fil in os.listdir(os.path.join(api,
                                                                                     "fsst",
                                                                                     "tests")) if
@@ -1340,7 +1326,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                                 del apimap_modules[modname]
                             else:
                                 print("NOTICE: Loaded Domain-API testing module", modname)
-                        full_coverage = dict()
+                        full_coverage = {}
                         for role in [fil[:-5] for fil in os.listdir(os.path.join(api, "roles")) if
                                      fil[-5:] == ".json"]:
                             full_coverage[role] = set()
@@ -1352,7 +1338,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                         # Make up a database name for our test, using network and stage name.
                         database = network + "/api_" + subdir
                         database = "-".join(database.lower().split("_"))
-                        test_list = list()
+                        test_list = []
                         for test in testsets:
                             if "api_role" in test:
                                 role = test["api_role"]
@@ -1403,8 +1389,8 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                                     for key in role_all:
                                         if key not in skip:
                                             role_used.add(key)
-                                    should_succeed_map = dict()
-                                    warn_only_map = dict()
+                                    should_succeed_map = {}
+                                    warn_only_map = {}
                                     for key in role_used:
                                         if key in should_succeed_exceptions:
                                             should_succeed_map[key] = not should_succeed
@@ -1417,7 +1403,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                                     minimal_succeed_count = int((minimal_coverage + 0.01) *
                                                                 len(should_succeed_map.keys()) /
                                                                 100)
-                                    test_obj = dict()
+                                    test_obj = {}
                                     test_obj["role"] = role
                                     test_obj["test"] = test_name
                                     test_obj["addr"] = auth_info[0]
@@ -1425,9 +1411,9 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                                     test_obj["auth_roles"] = list(auth_roles)
                                     test_obj["user"] = user
                                     test_obj["user_roles"] = list(user_roles)
-                                    test_obj["sub_tests"] = list()
-                                    for key in should_succeed_map:
-                                        test_obj["sub_tests"].append([key, should_succeed_map[key],
+                                    test_obj["sub_tests"] = []
+                                    for key, item in should_succeed_map.items():
+                                        test_obj["sub_tests"].append([key, item,
                                                                       warn_only_map[key]])
                                     test_obj["coverage"] = minimal_succeed_count
                                     test_list.append(test_obj)
@@ -1532,7 +1518,7 @@ def run_in_docker(tag, command, directory, daemonize, expose, api="apimap"):
     if os.path.isdir(apidir):
         mounts.append(docker.types.Mount("/usr/src/fsst/apimap",
                                          apidir, read_only=True, type="bind"))
-    ports = dict()
+    ports = {}
     name = "fsst-guestcommand-" + tag
     if expose or daemonize:
         if tag == "stable":
@@ -1575,10 +1561,12 @@ async def get_createkey_and_port(createkey, keyfile, dockerfind,
     if startfluree:
         rval = None
         command = ["/bin/bash", "/usr/src/fsst/fluree_start.sh", "-Dfdb-api-port=8090"]
+        # pylint: disable=consider-using-with
         if not verbosefluree:
             subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
             subprocess.Popen(command)
+        # pylint: enable=consider-using-with
         times = 0
         while not rval:
             try:
@@ -1682,7 +1670,7 @@ async def dockerstart_main(tag):
     """Main function for the dockerstart subcommand"""
     imagename = "pibara/fsst:" + tag
     command = "/bin/bash /usr/src/fsst/fluree_start.sh  -Dfdb-api-port=8090"
-    ports = dict()
+    ports = {}
     if tag == "stable":
         ports["8090/tcp"] = 8090
     else:
@@ -1918,7 +1906,7 @@ def apiartifact_main(api, output_js, roles, output, force):
 
     else:
         my_roles = roles.split(",")
-    desired = dict()
+    desired = {}
     desired["roles"] = set(my_roles)
     desired["queries"] = set()
     desired["transactions"] = set()
@@ -1946,11 +1934,11 @@ def apiartifact_main(api, output_js, roles, output, force):
         if not (os.path.isfile(output) and force):
             print(output, "file already exists:", output)
             sys.exit(2)
-    obj = dict()
-    obj["roles"] = dict()
-    obj["query"] = dict()
-    obj["xform"] = dict()
-    obj["transaction"] = dict()
+    obj = {}
+    obj["roles"] = {}
+    obj["query"] = {}
+    obj["xform"] = {}
+    obj["transaction"] = {}
     # pylint: disable=too-many-nested-blocks
     for subdir in ["roles", "query", "transaction"]:
         fulldir = os.path.join(api, subdir)
@@ -2003,7 +1991,7 @@ async def argparse_main():
     # pylint: disable=too-many-statements,too-many-branches,too-many-locals
     """The main for the argparse subcommand"""
     netname = "test" + str(int(time.time()/10) % 100000)
-    parsers = dict()
+    parsers = {}
     parsers["main"] = argparse.ArgumentParser()
     subparsers = parsers["main"].add_subparsers()
     # pylint: disable=line-too-long
