@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Simple script for compiling a fluree transaction init file, and for running
     basic tests with it"""
-# pylint: disable=too-many-lines, unspecified-encoding, too-complex
+# pylint: disable=too-many-lines, unspecified-encoding
 import os
 import os.path
 import re
@@ -12,35 +12,19 @@ import sys
 import argparse
 import json
 import time
-import hashlib
 import asyncio
 import itertools
 import importlib.util
-VERSION = "0.4.2"
+VERSION = "0.4.4"
 CRYPTO_OK = True
-KEY_TO_ID_OK = True
 DOCKER_OK = True
 try:
     import aioflureedb
-    from aioflureedb.domain_api import FlureeDomainAPI
 except ModuleNotFoundError:
     print("WARNING: - aioflureedb python lib not found.")
     CRYPTO_OK = False
 if not CRYPTO_OK:
     print("         - testing commands disabled.")
-
-try:
-    import base58
-except ModuleNotFoundError:
-    print("WARNING: - base58 python lib not found.")
-    KEY_TO_ID_OK = False
-try:
-    import bitcoinlib
-except ModuleNotFoundError:
-    print("WARNING: - bitcoinlib python lib not found.")
-    KEY_TO_ID_OK = False
-if not KEY_TO_ID_OK:
-    print("         - id extraction from keys disabled.")
 
 
 def runs_in_docker():
@@ -215,40 +199,6 @@ sys.stdout = FlushFile(sys.stdout)  # Fix print() not always flushing when runni
 #                                     linux docker on a windows host
 
 
-def key_to_id(privkey, createid):
-    """Convert a private key string into a fluree account id.
-
-    Parameters
-    ----------
-    privkey: string
-        A hexadecimal ECDSA private key.
-
-    Returns
-    -------
-    str
-        Base58 encoded adress/key-id within the FlureeDB address namespace
-
-    """
-    if privkey:
-        if not KEY_TO_ID_OK:
-            if createid is None:
-                raise RuntimeError("Need to specify createid on systems without bitcoinlib/base58" +
-                                   " support")
-            return createid
-        # Remove the bitcoin network id and the checksum from the base58 decoded bitcoin adress,
-        # then prefix with fluree network id.
-        core = b'\x0f\x02' + base58.b58decode(bitcoinlib.keys.Key(privkey).address())[1:-4]
-        # Take the sha256 of the sha256 of the decoded and patched bitcoin adress.
-        hash1 = hashlib.sha256()
-        hash2 = hashlib.sha256()
-        hash1.update(core)
-        hash2.update(hash1.digest())
-        # Use the first 4 characters as checksum, base58 encode the result.
-        keyid = base58.b58encode(core + hash2.digest()[:4]).decode()
-        return keyid
-    return None
-
-
 def query_to_clojure(obj, params):
     """Convert a FlureeQL query to a clojure '(query (str ...) )' smart-function function body.
 
@@ -421,7 +371,7 @@ def expand_transaction(transaction, subdir, fluree_parts, verboseerrors):
     return rval
 
 
-async def filldb(host, port, dbase, key, keyid, transactions):
+async def filldb(host, port, dbase, key, transactions):
     """Run a collection if thransactions against the database
 
     Parameters
@@ -435,8 +385,6 @@ async def filldb(host, port, dbase, key, keyid, transactions):
          transactions to.
     key: string
         The ECDSA signing key for our transactions. This should be the host default key.
-    keyid: string
-        The key-id of the above signing key
     transactions: list
         A list with Fluree transactions to execute.
 
@@ -448,13 +396,12 @@ async def filldb(host, port, dbase, key, keyid, transactions):
     """
     # pylint: disable=too-many-arguments
     async with aioflureedb.FlureeClient(masterkey=key,
-                                        auth_address=keyid,
                                         host=host,
                                         port=port) as flureeclient:
         await flureeclient.health.ready()
         await flureeclient.new_db(db_id=dbase)
         fdb = await flureeclient[dbase]
-        async with fdb(key, keyid) as database:
+        async with fdb(key) as database:
             await database.ready()
             for transaction in transactions:
                 try:
@@ -840,7 +787,7 @@ async def run_test_scenario(database, subdir, fluree_parts, fdb, scenario):
                                   os.path.join(testdir, "cleanup.json"))
 
 
-async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api_dir, api_modules):
+async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, api_modules):
     # pylint: disable=too-many-statements, too-many-branches
     """Create a test database, initialize database with transactions up to stage and run all
        domain-API tests for stage.
@@ -856,8 +803,6 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
         transactions to.
     key: string
         The ECDSA signing key for our transactions. This should be the host default key.
-    keyid: string
-        The key-id of the above signing key
     tests: list
         A list with domain API test descriptions
     transactions: list
@@ -868,7 +813,7 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
     """
     # pylint: disable=too-many-locals, too-many-arguments
     # Fluree host context, using priviledged (root role) default key.
-    async with aioflureedb.FlureeClient(masterkey=key, auth_address=keyid, host=host,
+    async with aioflureedb.FlureeClient(masterkey=key, host=host,
                                         port=port) as flureeclient:
         await flureeclient.health.ready()
         for test_index, current_test in enumerate(tests):
@@ -882,11 +827,11 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
             await flureeclient.new_db(db_id=dbase_name)
             fdb = await flureeclient[dbase_name]
             # Database context
-            async with fdb(key, keyid) as database:
+            async with fdb(key) as database:
                 await database.ready()
-                full_public_api_root = FlureeDomainAPI(api_dir, database)
-                full_testing_api_root = FlureeDomainAPI(os.path.join(api_dir, "fsst"),
-                                                        database)
+                full_public_api_root = aioflureedb.FlureeDomainAPI(api_dir, database)
+                full_testing_api_root = aioflureedb.FlureeDomainAPI(os.path.join(api_dir, "fsst"),
+                                                                    database)
                 # Run all the transactions in preparation to the tests
                 print(" - processing schema transaction sub-set")
                 for transaction in transactions:
@@ -978,10 +923,10 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                             raise RuntimeError("The prepare_root failed for test at index " +
                                                str(test_index) + " : " + str(is_ok[1]))
                     async with fdb(current_test["key"], current_test["addr"]) as user_database:
-                        full_public_api = FlureeDomainAPI(api_dir, user_database)
-                        full_testing_api = FlureeDomainAPI(os.path.join(api_dir,
-                                                                        "fsst"),
-                                                           user_database)
+                        full_public_api = aioflureedb.FlureeDomainAPI(api_dir, user_database)
+                        full_testing_api = aioflureedb.FlureeDomainAPI(os.path.join(api_dir,
+                                                                                    "fsst"),
+                                                                       user_database)
                         role_api = full_public_api.get_api_by_role(current_test["role"])
                         test_api = full_testing_api.get_api_by_role("test")
                         print(" + Using Domain-API test module for test user :",
@@ -1037,24 +982,25 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                                     if is_ok == should_succeed:
                                         print("     res=", is_ok, "EXPECTED")
                                         coverage += 1
-                                    elif warn_only:
-                                        print("WARNING: res=", is_ok, "NOT EXPECTED")
                                     else:
-                                        print("ERROR: res=", is_ok, "NOT EXPECTED")
-                                        raise RuntimeError(
-                                            "Unexpected result from method test for " +
-                                            method + " at sub-test " + str(test_index)
-                                        )
+                                        if warn_only:
+                                            print("WARNING: res=", is_ok, "NOT EXPECTED")
+                                        else:
+                                            print("ERROR: res=", is_ok, "NOT EXPECTED")
+                                            raise RuntimeError(
+                                                "Unexpected result from method test for " +
+                                                method + " at sub-test " + str(test_index))
                                 elif is_ok[0] == should_succeed:
                                     print("     res=", is_ok[0], "EXPECTED", is_ok[1])
                                     coverage += 1
-                                elif warn_only:
-                                    print("WARNING: res=", is_ok, "NOT EXPECTED")
                                 else:
-                                    print("ERROR: res=", is_ok, "NOT EXPECTED")
-                                    raise RuntimeError("Unexpected result from method test for"
-                                                       + " " + method + " at sub-test " +
-                                                       str(test_index))
+                                    if warn_only:
+                                        print("WARNING: res=", is_ok, "NOT EXPECTED")
+                                    else:
+                                        print("ERROR: res=", is_ok, "NOT EXPECTED")
+                                        raise RuntimeError("Unexpected result from method test for"
+                                                           + " " + method + " at sub-test " +
+                                                           str(test_index))
                         if getattr(tester, 'cleanup_user', None) is not None:
                             print(" + Running cleanup_user")
                             # pylint: disable=broad-except
@@ -1099,7 +1045,7 @@ async def domainapi_test(host, port, dbase, key, keyid, tests, transactions, api
                                        current_test["test"])
 
 
-async def smartfunction_test(host, port, dbase, key, keyid, subdir, transactions, fluree_parts):
+async def smartfunction_test(host, port, dbase, key, subdir, transactions, fluree_parts):
     """Create a test database, initialize database with transactions up to stage and run all
        tests for stage.
 
@@ -1114,8 +1060,6 @@ async def smartfunction_test(host, port, dbase, key, keyid, subdir, transactions
         transactions to.
     key: string
         The ECDSA signing key for our transactions. This should be the host default key.
-    keyid: string
-        The key-id of the above signing key
     subdir: string
         The subdir name of the stage the tests are being ran for.
     transactions: list
@@ -1131,14 +1075,14 @@ async def smartfunction_test(host, port, dbase, key, keyid, subdir, transactions
     """
     # pylint: disable=too-many-locals, too-many-arguments
     # Fluree host context, using priviledged (root role) default key.
-    async with aioflureedb.FlureeClient(masterkey=key, auth_address=keyid, host=host,
+    async with aioflureedb.FlureeClient(masterkey=key, host=host,
                                         port=port) as flureeclient:
         await flureeclient.health.ready()
         # Create the new database for our tests
         await flureeclient.new_db(db_id=dbase)
         fdb = await flureeclient[dbase]
         # Database context
-        async with fdb(key, keyid) as database:
+        async with fdb(key) as database:
             await database.ready()
             # Run all the transactions in preparation to the tests
             print(" - processing schema transaction sub-set")
@@ -1161,7 +1105,7 @@ async def smartfunction_test(host, port, dbase, key, keyid, subdir, transactions
             print(" -", len(testscenarios), "tests completed")
 
 
-async def fluree_main(notest, network, host, port, output, createkey, createid,
+async def fluree_main(notest, network, host, port, output, createkey,
                       target, fluree_parts, verboseerrors, api="apimap"):
     # pylint: disable=too-many-branches, too-many-statements, fixme
     # TODO: We may want to dismantle this function and refactor. Below is a remnant
@@ -1182,8 +1126,6 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
         File path for output artifact
     createkey: string
         The ECDSA signing key for our transactions. This should be the host default key.
-    createid: string
-        The key-id of the above signing key
     target:
         The build target name to use.
     fluree_parts: string
@@ -1299,7 +1241,6 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                                              port,
                                              database,
                                              createkey,
-                                             createid,
                                              build[maxstage],
                                              expanded2,
                                              fluree_parts)
@@ -1412,8 +1353,9 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                                     test_obj["user"] = user
                                     test_obj["user_roles"] = list(user_roles)
                                     test_obj["sub_tests"] = []
-                                    for key, item in should_succeed_map.items():
-                                        test_obj["sub_tests"].append([key, item,
+                                    for key, val in should_succeed_map.items():
+                                        test_obj["sub_tests"].append([key,
+                                                                      val,
                                                                       warn_only_map[key]])
                                     test_obj["coverage"] = minimal_succeed_count
                                     test_list.append(test_obj)
@@ -1427,7 +1369,6 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
                                              port,
                                              database,
                                              createkey,
-                                             createid,
                                              test_list,
                                              expanded2,
                                              api,
@@ -1446,7 +1387,7 @@ async def fluree_main(notest, network, host, port, output, createkey, createid,
             # list.
             database = network + "/" + target
             database = "-".join(database.lower().split("_"))
-            await filldb(host, port, database, createkey, createid, expanded)
+            await filldb(host, port, database, createkey, expanded)
             print("Deployed", fluree_parts, "target", target, "to", database, "on", host)
         elif testcount == 0:
             print("WARNING: build target has no tests defined")
@@ -1555,18 +1496,18 @@ def run_in_docker(tag, command, directory, daemonize, expose, api="apimap"):
 
 
 async def get_createkey_and_port(createkey, keyfile, dockerfind,
-                                 port, startfluree, verbosefluree, createid=""):
+                                 port, startfluree, verbosefluree):
     """Get the create-key and fluree port using the relevant commandline info"""
     # pylint: disable=too-many-arguments
     if startfluree:
         rval = None
         command = ["/bin/bash", "/usr/src/fsst/fluree_start.sh", "-Dfdb-api-port=8090"]
-        # pylint: disable=consider-using-with
         if not verbosefluree:
+            # pylint: disable=consider-using-with
             subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
+            # pylint: disable=consider-using-with
             subprocess.Popen(command)
-        # pylint: enable=consider-using-with
         times = 0
         while not rval:
             try:
@@ -1581,19 +1522,19 @@ async def get_createkey_and_port(createkey, keyfile, dockerfind,
                 print("       container after starting FlureeDB")
                 sys.exit(1)
         print("Started FlureeDB and got createkey from newly created keyfile")
-        return rval, port, key_to_id(rval, createid)
+        return rval, port
     if createkey:
         print("Using --createkey and --port values", )
-        return createkey, port, key_to_id(createkey, createid)
+        return createkey, port
     if keyfile:
         print("Using --keyfile and --port values")
         with open(keyfile) as kfil:
             createkey = kfil.read().replace("\r", "").replace("\n", "")
-            return createkey, port, key_to_id(createkey, createid)
+            return createkey, port
     if dockerfind:
         print("Fetching createkey and port from running image:", dockerfind)
         hostport, createkey = get_from_docker(dockerfind)
-        return createkey, hostport, key_to_id(createkey, createid)
+        return createkey, hostport
     print("ERROR: No way specfied to find default signing key for FlureeDB")
     print("       Use one of the following command line options:")
     print("")
@@ -1611,7 +1552,6 @@ async def artifact_main(output, directory, target, verbose_errors):
                       port=None,
                       output=output,
                       createkey=None,
-                      createid=None,
                       target=target,
                       fluree_parts=directory,
                       verboseerrors=verbose_errors)
@@ -1619,7 +1559,7 @@ async def artifact_main(output, directory, target, verbose_errors):
 
 
 async def test_main(directory, target, verboseerrors, host, port,
-                    network, createkey, createid, api):
+                    network, createkey, api):
     """Main function for the test subcommand"""
     # pylint: disable=too-many-arguments
     await fluree_main(notest=False,
@@ -1628,7 +1568,6 @@ async def test_main(directory, target, verboseerrors, host, port,
                       port=port,
                       output=None,
                       createkey=createkey,
-                      createid=createid,
                       target=target,
                       fluree_parts=directory,
                       verboseerrors=verboseerrors,
@@ -1636,7 +1575,7 @@ async def test_main(directory, target, verboseerrors, host, port,
     return
 
 
-async def deploy_main(directory, target, verboseerrors, host, port, network, createkey, createid):
+async def deploy_main(directory, target, verboseerrors, host, port, network, createkey):
     """Main function for the deploy subcommand"""
     # pylint: disable=too-many-arguments
     await fluree_main(notest=True,
@@ -1645,7 +1584,6 @@ async def deploy_main(directory, target, verboseerrors, host, port, network, cre
                       port=port,
                       output=None,
                       createkey=createkey,
-                      createid=createid,
                       target=target,
                       fluree_parts=directory,
                       verboseerrors=verboseerrors)
@@ -1669,7 +1607,7 @@ async def dockertest_main(directory, target, verboseerrors,
 async def dockerstart_main(tag):
     """Main function for the dockerstart subcommand"""
     imagename = "pibara/fsst:" + tag
-    cmd = "/bin/bash /usr/src/fsst/fluree_start.sh  -Dfdb-api-port=8090"
+    command = "/bin/bash /usr/src/fsst/fluree_start.sh  -Dfdb-api-port=8090"
     ports = {}
     if tag == "stable":
         ports["8090/tcp"] = 8090
@@ -1678,7 +1616,7 @@ async def dockerstart_main(tag):
     client = docker.from_env()
     name = "fsst-dockerstart-" + tag
     try:
-        client.containers.run(imagename, cmd, ports=ports,
+        client.containers.run(imagename, command, ports=ports,
                               detach=True, auto_remove=True, name=name)
         print("Started", imagename)
     except docker.errors.NotFound:
@@ -1761,7 +1699,7 @@ async def dockerdeploy_main(directory, target, verboseerrors, dbase, tag, verbos
     return run_in_docker(tag, cmd, directory, daemonize, True)
 
 
-async def guesttest_main(target, verboseerrors, network, linger, createkey, createid):
+async def guesttest_main(target, verboseerrors, network, linger, createkey):
     """Main function for the guesttest subcommand"""
     # pylint: disable=too-many-arguments
     prt = 8090
@@ -1771,7 +1709,6 @@ async def guesttest_main(target, verboseerrors, network, linger, createkey, crea
                       port=prt,
                       output=None,
                       createkey=createkey,
-                      createid=createid,
                       target=target,
                       fluree_parts="fluree_parts",
                       verboseerrors=verboseerrors)
@@ -1785,7 +1722,7 @@ async def guesttest_main(target, verboseerrors, network, linger, createkey, crea
     return
 
 
-async def artifactdeploy_main(inputfile, dbase, host, port, createkey, keyid):
+async def artifactdeploy_main(inputfile, dbase, host, port, createkey):
     # pylint: disable=too-many-arguments
     """Main function for the artifactdeploy subcommand"""
     try:
@@ -1811,7 +1748,6 @@ async def artifactdeploy_main(inputfile, dbase, host, port, createkey, keyid):
                       inputfile)
                 sys.exit(1)
     async with aioflureedb.FlureeClient(masterkey=createkey,
-                                        auth_address=keyid,
                                         host=host,
                                         port=port) as flureeclient:
         await flureeclient.health.ready()
@@ -1824,7 +1760,7 @@ async def artifactdeploy_main(inputfile, dbase, host, port, createkey, keyid):
             sys.exit(1)
         fdb = await flureeclient[dbase]
         # Database context
-        async with fdb(createkey, keyid) as database:
+        async with fdb(createkey) as database:
             await database.ready()
             for transaction in artifact:
                 try:
@@ -1862,7 +1798,7 @@ async def dockerparams_main(tag):
     print("PORT:", port)
 
 
-async def guestdeploy_main(target, verboseerrors, dbase, createkey, createid):
+async def guestdeploy_main(target, verboseerrors, dbase, createkey):
     """Main function for the guestdeploy subcommand"""
     prt = 8090
     await fluree_main(notest=True,
@@ -1871,11 +1807,10 @@ async def guestdeploy_main(target, verboseerrors, dbase, createkey, createid):
                       port=None,
                       output="artifact.json",
                       createkey=None,
-                      createid=None,
                       target=target,
                       fluree_parts="fluree_parts",
                       verboseerrors=verboseerrors)
-    await artifactdeploy_main("artifact.json", dbase, "localhost", prt, createkey, createid)
+    await artifactdeploy_main("artifact.json", dbase, "localhost", prt, createkey)
     print("LINGER == True")
     count = 0
     while True:
@@ -1909,6 +1844,7 @@ def apiartifact_main(api, output_js, roles, output, force):
     desired = {}
     desired["roles"] = set(my_roles)
     desired["queries"] = set()
+    desired["multi"] = set()
     desired["transactions"] = set()
     found_roles = set()
     for filename in os.listdir(rolesdir):
@@ -1925,6 +1861,9 @@ def apiartifact_main(api, output_js, roles, output, force):
                     if "transactions" in obj:
                         for query in obj["transactions"]:
                             desired["transactions"].add(query)
+                    if "multi" in obj:
+                        for query in obj["multi"]:
+                            desired["multi"].add(query)
     if bool(desired["roles"] - found_roles):
         print("ERROR: One or more designated roles not found in domain-API definition")
         for role in desired["roles"] - found_roles:
@@ -1938,19 +1877,24 @@ def apiartifact_main(api, output_js, roles, output, force):
     obj["roles"] = {}
     obj["query"] = {}
     obj["xform"] = {}
+    obj["multi"] = {}
     obj["transaction"] = {}
     # pylint: disable=too-many-nested-blocks
-    for subdir in ["roles", "query", "transaction"]:
+    for subdir in ["roles", "query", "transaction", "multi"]:
         fulldir = os.path.join(api, subdir)
         if os.path.isdir(fulldir):
+            print(fulldir)
             for filename in os.listdir(fulldir):
                 filepath = os.path.join(fulldir, filename)
                 if os.path.isfile(filepath):
+                    print(" *", filepath)
                     name, ext = filename.split(".")
                     if ext.lower() == "json":
                         # pylint: disable=too-many-boolean-expressions
                         if (subdir == "query" and
                                 name in desired["queries"] or
+                                subdir == "multi" and
+                                name in desired["multi"] or
                                 subdir == "transaction" and
                                 name in desired["transactions"] or
                                 subdir == "roles" and
@@ -1959,7 +1903,7 @@ def apiartifact_main(api, output_js, roles, output, force):
                                 obj[subdir][name] = json.load(infil)
                                 if subdir == "query" and name not in obj["xform"]:
                                     obj["xform"][name] = "$"
-                    elif (subdir == "query" and
+                    elif (subdir in ["query", "multi"] and
                           ext.lower() == "xform" and
                           name in desired["queries"]):
                         with open(filepath) as infil:
@@ -1977,8 +1921,7 @@ def apiartifact_main(api, output_js, roles, output, force):
                                     if name2 == "default":
                                         obj["transaction"][filename] = json.load(infil2)
                                     else:
-                                        obj["transaction"][filename + "/" + name2] = \
-                                                json.load(infil2)
+                                        obj["transaction"][filename + "/" + name2] = json.load(infil2)
     with open(output, "w") as outfil:
         if output_js:
             outfil.write("export let domain_api = ")
@@ -2019,7 +1962,6 @@ async def argparse_main():
         "port": "FlureeDB port. (default 8090)",
         "network": "FlureeDB network name. (generate if unspecified)",
         "createkey": "FlureeDB signing key for creation (alternative for --keyfile or --dockerfind)",
-        "createid": "Use in combination with createkey on systems without bitcoinlib support",
         "keyfile": "File containing FlureeDB signing key for creation",
         "dockerfind": "Extract FlureeDB signing key for creation from running docker",
         "linger": "Keep docker/FlureeDB running after tests have completed",
@@ -2053,8 +1995,6 @@ async def argparse_main():
         "roles": "ALL",
         "force": False
     }
-    if not KEY_TO_ID_OK:
-        defaults["createid"] = None
     argsmap = {
         "artifact": {"output", "dir", "target", "verboseerrors"},
         "test": {
@@ -2105,10 +2045,6 @@ async def argparse_main():
         "version": {},
         "apiartifact": {"js", "api", "roles", "force", "output"}
     }
-    if not KEY_TO_ID_OK:
-        argsmap["test"].add("createid")
-        argsmap["deploy"].add("createid")
-        argsmap["artifactdeploy"].add("createid")
     if CRYPTO_OK:
         if DOCKER_OK:
             if runs_in_docker():
@@ -2134,20 +2070,21 @@ async def argparse_main():
                                "dockerstart",
                                "dockerstop",
                                "apiartifact"]
-        elif runs_in_docker():
-            subcommands = ["artifact",
-                           "test",
-                           "deploy",
-                           "guesttest",
-                           "guestdeploy",
-                           "version",
-                           "apiartifact"]
         else:
-            subcommands = ["artifact",
-                           "test",
-                           "deploy",
-                           "version",
-                           "apiartifact"]
+            if runs_in_docker():
+                subcommands = ["artifact",
+                               "test",
+                               "deploy",
+                               "guesttest",
+                               "guestdeploy",
+                               "version",
+                               "apiartifact"]
+            else:
+                subcommands = ["artifact",
+                               "test",
+                               "deploy",
+                               "version",
+                               "apiartifact"]
     else:
         subcommands = ["artifact"]
     for subcommand in subcommands:
@@ -2177,8 +2114,6 @@ async def argparse_main():
             "roles",
             "force"
         }
-        if not KEY_TO_ID_OK:
-            todo.add("createid")
         for sc_arg in sc_args:
             for subarg in sc_arg.split(":"):
                 sa_help = helps[subarg]
@@ -2207,21 +2142,12 @@ async def argparse_main():
     port = args.port
     if args.subcommand in ["test", "deploy", "guesttest", "guestdeploy", "artifactdeploy"]:
         startfluree = bool(args.subcommand in ["guesttest", "guestdeploy"])
-        if KEY_TO_ID_OK:
-            createkey, port, createid = await get_createkey_and_port(args.createkey,
-                                                                     args.keyfile,
-                                                                     args.dockerfind,
-                                                                     args.port,
-                                                                     startfluree,
-                                                                     args.verbosefluree)
-        else:
-            createkey, port, createid = await get_createkey_and_port(args.createkey,
-                                                                     args.keyfile,
-                                                                     args.dockerfind,
-                                                                     args.port,
-                                                                     startfluree,
-                                                                     args.verbosefluree,
-                                                                     args.createid)
+        createkey, port = await get_createkey_and_port(args.createkey,
+                                                       args.keyfile,
+                                                       args.dockerfind,
+                                                       args.port,
+                                                       startfluree,
+                                                       args.verbosefluree)
     if args.subcommand == "test":
         await test_main(args.dir,
                         args.target,
@@ -2230,7 +2156,6 @@ async def argparse_main():
                         port,
                         args.network,
                         createkey,
-                        createid,
                         args.api)
     elif args.subcommand == "deploy":
         await deploy_main(args.dir,
@@ -2238,8 +2163,7 @@ async def argparse_main():
                           args.verboseerrors,
                           args.host,
                           port, args.network,
-                          createkey,
-                          createid)
+                          createkey)
     elif args.subcommand == "dockertest":
         await dockertest_main(args.dir,
                               args.target,
@@ -2262,12 +2186,11 @@ async def argparse_main():
                              args.verboseerrors,
                              args.network,
                              args.linger,
-                             createkey,
-                             createid)
+                             createkey)
     elif args.subcommand == "guestdeploy":
-        await guestdeploy_main(args.target, args.verboseerrors, args.db, createkey, createid)
+        await guestdeploy_main(args.target, args.verboseerrors, args.db, createkey)
     elif args.subcommand == "artifactdeploy":
-        await artifactdeploy_main(args.input, args.db, args.host, port, createkey, createid)
+        await artifactdeploy_main(args.input, args.db, args.host, port, createkey)
     elif args.subcommand == "dockerparams":
         await dockerparams_main(args.tag)
     elif args.subcommand == "version":
