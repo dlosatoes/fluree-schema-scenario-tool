@@ -1921,20 +1921,22 @@ def apiartifact_main(api, output_js, roles, output, force):
     for filename in os.listdir(rolesdir):
         filepath = os.path.join(rolesdir, filename)
         if os.path.isfile(filepath):
-            name, ext = filename.split(".")
-            if ext.lower() == "json" and name in desired["roles"]:
-                found_roles.add(name)
-                with open(filepath) as infil:
-                    obj = json.load(infil)
-                    if "queries" in obj:
-                        for query in obj["queries"]:
-                            desired["queries"].add(query)
-                    if "transactions" in obj:
-                        for query in obj["transactions"]:
-                            desired["transactions"].add(query)
-                    if "multi" in obj:
-                        for query in obj["multi"]:
-                            desired["multi"].add(query)
+            parts = filename.split(".")
+            if len(parts) == 2:
+                name, ext = filename.split(".")
+                if ext.lower() == "json" and name in desired["roles"]:
+                    found_roles.add(name)
+                    with open(filepath) as infil:
+                        obj = json.load(infil)
+                        if "queries" in obj:
+                            for query in obj["queries"]:
+                                desired["queries"].add(query)
+                        if "transactions" in obj:
+                            for query in obj["transactions"]:
+                                desired["transactions"].add(query)
+                        if "multi" in obj:
+                            for query in obj["multi"]:
+                                desired["multi"].add(query)
     if bool(desired["roles"] - found_roles):
         print("ERROR: One or more designated roles not found in domain-API definition")
         for role in desired["roles"] - found_roles:
@@ -1958,27 +1960,29 @@ def apiartifact_main(api, output_js, roles, output, force):
             for filename in os.listdir(fulldir):
                 filepath = os.path.join(fulldir, filename)
                 if os.path.isfile(filepath):
-                    print(" *", filepath)
-                    name, ext = filename.split(".")
-                    if ext.lower() == "json":
-                        # pylint: disable=too-many-boolean-expressions
-                        if (subdir == "query" and
-                                name in desired["queries"] or
-                                subdir == "multi" and
-                                name in desired["multi"] or
-                                subdir == "transaction" and
-                                name in desired["transactions"] or
-                                subdir == "roles" and
-                                name in desired["roles"]):
+                    parts = filename.split(".")
+                    if len(parts) == 2:
+                        print(" *", filepath)
+                        name, ext = filename.split(".")
+                        if ext.lower() == "json":
+                            # pylint: disable=too-many-boolean-expressions
+                            if (subdir == "query" and
+                                    name in desired["queries"] or
+                                    subdir == "multi" and
+                                    name in desired["multi"] or
+                                    subdir == "transaction" and
+                                    name in desired["transactions"] or
+                                    subdir == "roles" and
+                                    name in desired["roles"]):
+                                with open(filepath) as infil:
+                                    obj[subdir][name] = json.load(infil)
+                                    if subdir == "query" and name not in obj["xform"]:
+                                        obj["xform"][name] = "$"
+                        elif (subdir in ["query", "multi"] and
+                              ext.lower() == "xform" and
+                              name in desired["queries"]):
                             with open(filepath) as infil:
-                                obj[subdir][name] = json.load(infil)
-                                if subdir == "query" and name not in obj["xform"]:
-                                    obj["xform"][name] = "$"
-                    elif (subdir in ["query", "multi"] and
-                          ext.lower() == "xform" and
-                          name in desired["queries"]):
-                        with open(filepath) as infil:
-                            obj["xform"][name] = infil.read()
+                                obj["xform"][name] = infil.read()
                 elif (os.path.isdir(filepath) and
                       subdir == "transaction" and
                       filename in desired["transactions"]):
