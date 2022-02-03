@@ -1034,6 +1034,7 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
                                 scenario = "scenario" + str(index)
                                 scenario_method = getattr(tester, scenario, None)
                                 while scenario_method is not None:
+                                    # pylint: disable=broad-except
                                     try:
                                         is_ok = await scenario_method(role_api, test_api)
                                     except Exception as ex:
@@ -1606,7 +1607,7 @@ async def get_createkey_and_port(createkey, keyfile, dockerfind,
 
 async def artifact_main(output, directory, target, verbose_errors):
     """Main function for the artifact sub command"""
-    ok = await fluree_main(notest=False,
+    is_ok = await fluree_main(notest=False,
                       network=None,
                       host=None,
                       port=None,
@@ -1615,7 +1616,7 @@ async def artifact_main(output, directory, target, verbose_errors):
                       target=target,
                       fluree_parts=directory,
                       verboseerrors=verbose_errors)
-    if not ok:
+    if not is_ok:
         sys.exit(1)
     return
 
@@ -1624,7 +1625,7 @@ async def test_main(directory, target, verboseerrors, host, port,
                     network, createkey, api):
     """Main function for the test subcommand"""
     # pylint: disable=too-many-arguments
-    ok = await fluree_main(notest=False,
+    is_ok = await fluree_main(notest=False,
                       network=network,
                       host=host,
                       port=port,
@@ -1634,7 +1635,7 @@ async def test_main(directory, target, verboseerrors, host, port,
                       fluree_parts=directory,
                       verboseerrors=verboseerrors,
                       api=api)
-    if not ok:
+    if not is_ok:
         sys.exit(1)
     return
 
@@ -1642,7 +1643,7 @@ async def test_main(directory, target, verboseerrors, host, port,
 async def deploy_main(directory, target, verboseerrors, host, port, network, createkey):
     """Main function for the deploy subcommand"""
     # pylint: disable=too-many-arguments
-    ok = await fluree_main(notest=True,
+    is_ok = await fluree_main(notest=True,
                       network=network,
                       host=host,
                       port=port,
@@ -1651,7 +1652,7 @@ async def deploy_main(directory, target, verboseerrors, host, port, network, cre
                       target=target,
                       fluree_parts=directory,
                       verboseerrors=verboseerrors)
-    if not ok:
+    if not is_ok:
         sys.exit(1)
     return
 
@@ -1769,7 +1770,7 @@ async def guesttest_main(target, verboseerrors, network, linger, createkey):
     """Main function for the guesttest subcommand"""
     # pylint: disable=too-many-arguments
     prt = 8090
-    ok = await fluree_main(notest=False,
+    is_ok = await fluree_main(notest=False,
                       network=network,
                       host="localhost",
                       port=prt,
@@ -1785,7 +1786,7 @@ async def guesttest_main(target, verboseerrors, network, linger, createkey):
             await asyncio.sleep(30)
             count += 1
             print('LINGER', count, flush=True)
-    if not ok:
+    if not is_ok:
         sys.exit(1)
     return
 
@@ -1869,7 +1870,7 @@ async def dockerparams_main(tag):
 async def guestdeploy_main(target, verboseerrors, dbase, createkey):
     """Main function for the guestdeploy subcommand"""
     prt = 8090
-    ok = await fluree_main(notest=True,
+    is_ok = await fluree_main(notest=True,
                       network=None,
                       host=None,
                       port=None,
@@ -1878,15 +1879,15 @@ async def guestdeploy_main(target, verboseerrors, dbase, createkey):
                       target=target,
                       fluree_parts="fluree_parts",
                       verboseerrors=verboseerrors)
-    if ok:
-        ok = await artifactdeploy_main("artifact.json", dbase, "localhost", prt, createkey)
+    if is_ok:
+        is_ok = await artifactdeploy_main("artifact.json", dbase, "localhost", prt, createkey)
     print("LINGER == True")
     count = 0
     while True:
         await asyncio.sleep(30)
         count += 1
         print('LINGER', count, flush=True)
-    if not ok:
+    if not is_ok:
         sys.exit(1)
 
 
