@@ -36,7 +36,6 @@ RUN apt-get update && \
     # Some extra dependencies needed because we use the "slim" python image from docker.
     apt-get --yes install libgmp-dev && \
     apt-get --yes install unzip && \
-    mkdir /usr/share/man/man1 && \
     apt-get install dialog -y && \
     # Install Java (dependency for FlureeDB)
     apt-get install openjdk-11-jre-headless -y && \

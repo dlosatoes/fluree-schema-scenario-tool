@@ -30,17 +30,8 @@ Prior to using the *fsst* tool, use *pip install* to install all dependencies.
 Note that these dependencies should not be needed if you only intent to use the unit-test (using docker) or the docker temp instance of Fluree.
 
 ```bash
-python3 -m pip install base58 aioflureedb bitcoinlib docker
+python3 -m pip install base58 aioflureedb docker
 ```
-On windows you need also need this to make bitcoinlib work:
-```powershell
-pip install sqlalchemy --upgrade
-```
-this will result in an error:
-```
-ERROR: bitcoinlib 0.5.1 has requirement SQLAlchemy==1.3.2, but you'll have sqlalchemy 1.3.20 which is incompatible.
-```
-But fsst will work despite the error.
 
 It is important to note that as some dependencies are only needed for some subcommands, it is possible to run *fsst* without some of the dependencies installed, but doing so will disable several subcommands.
 

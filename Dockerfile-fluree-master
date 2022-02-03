@@ -41,7 +41,6 @@ RUN apt-get update && \
     python3 -m pip install pip --force && \
     # Dependencies of fsst tool
     python3 -m pip install base58 && \
-    python3 -m pip install bitcoinlib && \
     python3 -m pip install aioflureedb && \
     # Unzip the fluree zip file and remove the zip.
     cd /usr/src && \
