@@ -818,7 +818,7 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
         await flureeclient.health.ready()
         for test_index, current_test in enumerate(tests):
             print(" ###", current_test["test"], "test_index =", test_index, "###")
-            print(" ###", current_test["doc"],"###")
+            print(" ###", current_test["doc"], "###")
             coverage_treshold = current_test["coverage"]
             coverage = 0
             if test_index == 0:
@@ -866,7 +866,7 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
                                 ]
                             }
                         ])
-                    print(" - ok, added auth roles for", current_test["addr"],":", current_test["auth_roles"])
+                    print(" - ok, added auth roles for", current_test["addr"], ":", current_test["auth_roles"])
                 if current_test["auth_roles_prepare"]:
                     await database.command.transaction(
                         [
@@ -1608,14 +1608,14 @@ async def get_createkey_and_port(createkey, keyfile, dockerfind,
 async def artifact_main(output, directory, target, verbose_errors):
     """Main function for the artifact sub command"""
     is_ok = await fluree_main(notest=False,
-                      network=None,
-                      host=None,
-                      port=None,
-                      output=output,
-                      createkey=None,
-                      target=target,
-                      fluree_parts=directory,
-                      verboseerrors=verbose_errors)
+                              network=None,
+                              host=None,
+                              port=None,
+                              output=output,
+                              createkey=None,
+                              target=target,
+                              fluree_parts=directory,
+                              verboseerrors=verbose_errors)
     if not is_ok:
         sys.exit(1)
     return
@@ -1626,15 +1626,15 @@ async def test_main(directory, target, verboseerrors, host, port,
     """Main function for the test subcommand"""
     # pylint: disable=too-many-arguments
     is_ok = await fluree_main(notest=False,
-                      network=network,
-                      host=host,
-                      port=port,
-                      output=None,
-                      createkey=createkey,
-                      target=target,
-                      fluree_parts=directory,
-                      verboseerrors=verboseerrors,
-                      api=api)
+                              network=network,
+                              host=host,
+                              port=port,
+                              output=None,
+                              createkey=createkey,
+                              target=target,
+                              fluree_parts=directory,
+                              verboseerrors=verboseerrors,
+                              api=api)
     if not is_ok:
         sys.exit(1)
     return
@@ -1644,14 +1644,14 @@ async def deploy_main(directory, target, verboseerrors, host, port, network, cre
     """Main function for the deploy subcommand"""
     # pylint: disable=too-many-arguments
     is_ok = await fluree_main(notest=True,
-                      network=network,
-                      host=host,
-                      port=port,
-                      output=None,
-                      createkey=createkey,
-                      target=target,
-                      fluree_parts=directory,
-                      verboseerrors=verboseerrors)
+                              network=network,
+                              host=host,
+                              port=port,
+                              output=None,
+                              createkey=createkey,
+                              target=target,
+                              fluree_parts=directory,
+                              verboseerrors=verboseerrors)
     if not is_ok:
         sys.exit(1)
     return
@@ -1771,14 +1771,14 @@ async def guesttest_main(target, verboseerrors, network, linger, createkey):
     # pylint: disable=too-many-arguments
     prt = 8090
     is_ok = await fluree_main(notest=False,
-                      network=network,
-                      host="localhost",
-                      port=prt,
-                      output=None,
-                      createkey=createkey,
-                      target=target,
-                      fluree_parts="fluree_parts",
-                      verboseerrors=verboseerrors)
+                              network=network,
+                              host="localhost",
+                              port=prt,
+                              output=None,
+                              createkey=createkey,
+                              target=target,
+                              fluree_parts="fluree_parts",
+                              verboseerrors=verboseerrors)
     if linger:
         print("LINGER == True")
         count = 0
@@ -1871,14 +1871,14 @@ async def guestdeploy_main(target, verboseerrors, dbase, createkey):
     """Main function for the guestdeploy subcommand"""
     prt = 8090
     is_ok = await fluree_main(notest=True,
-                      network=None,
-                      host=None,
-                      port=None,
-                      output="artifact.json",
-                      createkey=None,
-                      target=target,
-                      fluree_parts="fluree_parts",
-                      verboseerrors=verboseerrors)
+                              network=None,
+                              host=None,
+                              port=None,
+                              output="artifact.json",
+                              createkey=None,
+                              target=target,
+                              fluree_parts="fluree_parts",
+                              verboseerrors=verboseerrors)
     if is_ok:
         is_ok = await artifactdeploy_main("artifact.json", dbase, "localhost", prt, createkey)
     print("LINGER == True")
@@ -2151,13 +2151,13 @@ async def argparse_main():
                            "test",
                            "deploy",
                            "guesttest",
-                            "guestdeploy",
+                           "guestdeploy",
                            "version",
                            "apiartifact"]
         else:
             subcommands = ["artifact",
                            "test",
-                            "deploy",
+                           "deploy",
                            "version",
                            "apiartifact"]
     else:
