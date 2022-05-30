@@ -1575,8 +1575,8 @@ def run_in_docker(tag, command, directory, daemonize, expose, api="apimap"):
             match = client.images.pull("pibara/fsst", tag=tag)
             print("  - Fetched")
         except requests.exceptions.HTTPError:
-          print("ERROR: ", lookfor, "docker image not found")
-          sys.exit(0)
+            print("ERROR: ", lookfor, "docker image not found")
+            sys.exit(0)
     workdir = os.path.join(os.getcwd(), directory)
     if not os.path.isdir(workdir):
         print("ERROR:", workdir, "isn't a valid directory path")
