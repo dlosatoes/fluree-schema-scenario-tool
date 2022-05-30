@@ -840,7 +840,7 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
                 await database.ready()
                 full_public_api_root = aioflureedb.domain_api.FlureeDomainAPI(api_dir, database)
                 full_testing_api_root = aioflureedb.domain_api.FlureeDomainAPI(os.path.join(api_dir, "fsst"),
-                                                                    database)
+                                                                               database)
                 # Run all the transactions in preparation to the tests
                 print(" - processing schema transaction sub-set")
                 for transaction in transactions:
@@ -959,11 +959,11 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
                             full_public_api = aioflureedb.domain_api.FlureeDomainAPI(api_dir, user_database)
                             full_public_api_prepare = aioflureedb.domain_api.FlureeDomainAPI(api_dir, user_database_prepare)
                             full_testing_api = aioflureedb.domain_api.FlureeDomainAPI(os.path.join(api_dir,
-                                                                                        "fsst"),
-                                                                           user_database)
+                                                                                                   "fsst"),
+                                                                                      user_database)
                             full_testing_api_prepare = aioflureedb.domain_api.FlureeDomainAPI(os.path.join(api_dir,
-                                                                                                "fsst"),
-                                                                                   user_database_prepare)
+                                                                                                           "fsst"),
+                                                                                              user_database_prepare)
                             role_api["user"] = full_public_api.get_api_by_role(current_test["role"])
                             role_api["role"] = full_public_api_prepare.get_api_by_role(current_test["role"])
                             test_api["user"] = full_testing_api.get_api_by_role("test")
