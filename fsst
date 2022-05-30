@@ -838,8 +838,8 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
             # Database context
             async with fdb(key) as database:
                 await database.ready()
-                full_public_api_root = aioflureedb.FlureeDomainAPI(api_dir, database)
-                full_testing_api_root = aioflureedb.FlureeDomainAPI(os.path.join(api_dir, "fsst"),
+                full_public_api_root = aioflureedb.domain_api.FlureeDomainAPI(api_dir, database)
+                full_testing_api_root = aioflureedb.domain_api.FlureeDomainAPI(os.path.join(api_dir, "fsst"),
                                                                     database)
                 # Run all the transactions in preparation to the tests
                 print(" - processing schema transaction sub-set")
@@ -956,12 +956,12 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
                     test_api["root"] = full_testing_api_root.get_api_by_role("root")
                     async with fdb(current_test["key"]) as user_database:
                         async with fdb(current_test["key_prepare"]) as user_database_prepare:
-                            full_public_api = aioflureedb.FlureeDomainAPI(api_dir, user_database)
-                            full_public_api_prepare = aioflureedb.FlureeDomainAPI(api_dir, user_database_prepare)
-                            full_testing_api = aioflureedb.FlureeDomainAPI(os.path.join(api_dir,
+                            full_public_api = aioflureedb.domain_api.FlureeDomainAPI(api_dir, user_database)
+                            full_public_api_prepare = aioflureedb.domain_api.FlureeDomainAPI(api_dir, user_database_prepare)
+                            full_testing_api = aioflureedb.domain_api.FlureeDomainAPI(os.path.join(api_dir,
                                                                                         "fsst"),
                                                                            user_database)
-                            full_testing_api_prepare = aioflureedb.FlureeDomainAPI(os.path.join(api_dir,
+                            full_testing_api_prepare = aioflureedb.domain_api.FlureeDomainAPI(os.path.join(api_dir,
                                                                                                 "fsst"),
                                                                                    user_database_prepare)
                             role_api["user"] = full_public_api.get_api_by_role(current_test["role"])
