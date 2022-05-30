@@ -15,7 +15,8 @@ import time
 import asyncio
 import itertools
 import importlib.util
-VERSION = "0.4.5"
+import requests
+VERSION = "0.4.8"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -399,6 +400,9 @@ async def filldb(host, port, dbase, key, transactions):
                                         host=host,
                                         port=port) as flureeclient:
         await flureeclient.health.ready()
+        fdb_version = await flureeclient.version()
+        if fdb_version[0] > "1":
+            raise RuntimeError("The fsst tool doesn't know how to create a database on version 2.x of FlureeDB")
         await flureeclient.new_db(db_id=dbase)
         fdb = await flureeclient[dbase]
         async with fdb(key) as database:
@@ -826,6 +830,9 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
             else:
                 dbase_name = dbase + "-" + str(test_index)
             # Create the new database for our tests
+            fdb_version = await flureeclient.version()
+            if fdb_version[0] > "1":
+                raise RuntimeError("The fsst tool doesn't know how to create a database on version 2.x of FlureeDB")
             await flureeclient.new_db(db_id=dbase_name)
             fdb = await flureeclient[dbase_name]
             # Database context
@@ -1049,15 +1056,18 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
                                             print("    WARNING: res=", is_ok, "NOT EXPECTED")
                                         else:
                                             print("    ERROR: res=", is_ok, "NOT EXPECTED")
-                                        raise RuntimeError(
-                                            "Unexpected result from scenario for " +
-                                            scenario + " at sub-test " + str(test_index))
+                                            raise RuntimeError(
+                                                "Unexpected result from scenario for " +
+                                                scenario + " at sub-test " + str(test_index))
                                     elif is_ok[0]:
                                         print("     res=", is_ok[0], is_ok[1])
                                     elif warn_only:
                                         print("    WARNING: res=", is_ok[0], "NOT EXPECTED",  is_ok[1])
                                     else:
                                         print("    ERROR: res=", is_ok[0], "NOT EXPECTED", is_ok[1])
+                                        raise RuntimeError(
+                                                "Unexpected result from scenario for " +
+                                                scenario + " at sub-test " + str(test_index))
                                     index += 1
                                     scenario = "scenario" + str(index)
                                     scenario_method = getattr(tester, scenario, None)
@@ -1102,13 +1112,22 @@ async def smartfunction_test(host, port, dbase, key, subdir, transactions, flure
     # Fluree host context, using priviledged (root role) default key.
     async with aioflureedb.FlureeClient(masterkey=key, host=host,
                                         port=port) as flureeclient:
+        print("Client created")
         await flureeclient.health.ready()
+        print("Server ready, creating database", dbase)
         # Create the new database for our tests
+        fdb_version = await flureeclient.version()
+        if fdb_version[0] > "1":
+            raise RuntimeError("The fsst tool doesn't know how to create a database on version 2.x of FlureeDB")
         await flureeclient.new_db(db_id=dbase)
+        print("Database created")
         fdb = await flureeclient[dbase]
+        print("Database handle fetched")
         # Database context
         async with fdb(key) as database:
+            print("Database handle context opened")
             await database.ready()
+            print("Database ready")
             # Run all the transactions in preparation to the tests
             print(" - processing schema transaction sub-set")
             for transaction in transactions:
@@ -1131,7 +1150,7 @@ async def smartfunction_test(host, port, dbase, key, subdir, transactions, flure
 
 
 async def fluree_main(notest, network, host, port, output, createkey,
-                      target, fluree_parts, verboseerrors, api="apimap"):
+                      target, fluree_parts, verboseerrors, api="apimap", stages="ALL"):
     # pylint: disable=too-many-branches, too-many-statements, fixme
     # TODO: We may want to dismantle this function and refactor. Below is a remnant
     #       of the 0.1 version of fsst that didn't yet use subcommands.
@@ -1172,6 +1191,13 @@ async def fluree_main(notest, network, host, port, output, createkey,
             ]
         }
     }, ".", fluree_parts, False)[0]]
+    allstages = False
+    teststages = set()
+    if stages == "ALL":
+        allstages = True
+    else:
+        teststages = set(stages.split(","))
+    print("DEBUG:", allstages, list(teststages))
     try:
         expanded = []
         expanded.append(maxblock)
@@ -1224,7 +1250,7 @@ async def fluree_main(notest, network, host, port, output, createkey,
                 # Otherwise, if notest is false and the stage has a test.json,
                 #  we run our inner loop for testing
                 testfile = os.path.join(fluree_parts, subdir, "test.json")
-                if os.path.isfile(testfile) and not notest:
+                if os.path.isfile(testfile) and not notest and (allstages or subdir in teststages):
                     testcount += 1
                     # Make up a database name for our test, using network and stage name.
                     database = network + "/" + subdir
@@ -1262,17 +1288,53 @@ async def fluree_main(notest, network, host, port, output, createkey,
                                                                     fluree_parts,
                                                                     verboseerrors))
                     # Run all test scenarios for this stage
-                    await smartfunction_test(host,
-                                             port,
-                                             database,
-                                             createkey,
-                                             build[maxstage],
-                                             expanded2,
-                                             fluree_parts)
+                    if allstages or build[maxstage] in teststages:
+                        print("Running smartfunction_test")
+                        await smartfunction_test(host,
+                                                 port,
+                                                 database,
+                                                 createkey,
+                                                 build[maxstage],
+                                                 expanded2,
+                                                 fluree_parts)
+                    else:
+                        print("Skipping tests for", build[maxstage])
                 # If notest is false and the stage has a domain.json,
                 #  we run domain-API tests
                 testfile = os.path.join(fluree_parts, subdir, "domain.json")
-                if os.path.isfile(testfile) and not notest:
+                if os.path.isfile(testfile) and not notest and (allstages or subdir in teststages):
+                    expanded2 = []
+                    expanded2.append(maxblock)
+                    print("- Database:", database)
+                    print(" - collecting transactions from build subdirs")
+                    # Run the test with transactions from all stages up to this one.
+                    print("Going through first", maxstage+1, "stages")
+                    for subdir2 in build[:maxstage+1]:
+                        print("  -", subdir2)
+                        main = os.path.join(fluree_parts, subdir2, "main.json")
+                        noexpand = os.path.join(fluree_parts, subdir2 + ".json")
+                        if os.path.isfile(noexpand):
+                            with open(noexpand) as nefile:
+                                nelist = json.load(nefile)
+                            for transaction in nelist:
+                                transaction_out = []
+                                for operation in transaction:
+                                    if (verboseerrors and "_id" in operation and "id" in operation
+                                            and operation["_id"].startswith("_rule")
+                                            and "errorMessage" not in operation):
+                                        print("       + Adding verbose error for", operation["id"])
+                                        operation["errorMessage"] = "Verbose Errors: " + \
+                                                                    operation["id"]
+                                    transaction_out.append(operation)
+                                expanded2.append(transaction_out)
+                        else:
+                            with open(main) as mainfile:
+                                mainlist = json.load(mainfile)
+                            for entry in mainlist:
+                                expanded2.append(expand_transaction(entry,
+                                                                    subdir2,
+                                                                    fluree_parts,
+                                                                    verboseerrors))
                     with open(testfile) as testfil:
                         testsets = json.load(testfil)
                     if (os.path.isdir(api) and
@@ -1508,8 +1570,13 @@ def run_in_docker(tag, command, directory, daemonize, expose, api="apimap"):
             if repotag == lookfor:
                 match = image
     if match is None:
-        print("ERROR: ", lookfor, "docker image not found")
-        sys.exit(0)
+        print("NOTICE:", tag, "not found, trying to fetch from docker hubi, this may take a moment.")
+        try:
+            match = client.images.pull("pibara/fsst", tag=tag)
+            print("  - Fetched")
+        except requests.exceptions.HTTPError:
+          print("ERROR: ", lookfor, "docker image not found")
+          sys.exit(0)
     workdir = os.path.join(os.getcwd(), directory)
     if not os.path.isdir(workdir):
         print("ERROR:", workdir, "isn't a valid directory path")
@@ -1622,7 +1689,7 @@ async def artifact_main(output, directory, target, verbose_errors):
 
 
 async def test_main(directory, target, verboseerrors, host, port,
-                    network, createkey, api):
+                    network, createkey, api, stages):
     """Main function for the test subcommand"""
     # pylint: disable=too-many-arguments
     is_ok = await fluree_main(notest=False,
@@ -1634,7 +1701,8 @@ async def test_main(directory, target, verboseerrors, host, port,
                               target=target,
                               fluree_parts=directory,
                               verboseerrors=verboseerrors,
-                              api=api)
+                              api=api,
+                              stages=stages)
     if not is_ok:
         sys.exit(1)
     return
@@ -1658,7 +1726,7 @@ async def deploy_main(directory, target, verboseerrors, host, port, network, cre
 
 
 async def dockertest_main(directory, target, verboseerrors,
-                          network, tag, verbosefluree, linger, api):
+                          network, tag, verbosefluree, linger, api, stages):
     """Main function for the dockertest subcommand"""
     # pylint: disable=too-many-arguments
     cmd = "./fsst guesttest --target " + target + " --network " + network
@@ -1668,6 +1736,7 @@ async def dockertest_main(directory, target, verboseerrors,
         cmd += " --verbosefluree"
     if linger:
         cmd += " --linger"
+    cmd += " --stages " + stages
     return run_in_docker(tag, cmd, directory, False, linger, api=api)
 
 
@@ -1766,7 +1835,7 @@ async def dockerdeploy_main(directory, target, verboseerrors, dbase, tag, verbos
     return run_in_docker(tag, cmd, directory, daemonize, True)
 
 
-async def guesttest_main(target, verboseerrors, network, linger, createkey):
+async def guesttest_main(target, verboseerrors, network, linger, createkey, stages):
     """Main function for the guesttest subcommand"""
     # pylint: disable=too-many-arguments
     prt = 8090
@@ -1778,7 +1847,8 @@ async def guesttest_main(target, verboseerrors, network, linger, createkey):
                               createkey=createkey,
                               target=target,
                               fluree_parts="fluree_parts",
-                              verboseerrors=verboseerrors)
+                              verboseerrors=verboseerrors,
+                              stages=stages)
     if linger:
         print("LINGER == True")
         count = 0
@@ -1820,6 +1890,9 @@ async def artifactdeploy_main(inputfile, dbase, host, port, createkey):
                                         host=host,
                                         port=port) as flureeclient:
         await flureeclient.health.ready()
+        fdb_version = await flureeclient.version()
+        if fdb_version[0] > "1":
+            raise RuntimeError("The fsst tool doesn't know how to create a database on version 2.x of FlureeDB")
         # Create the new database for our tests
         try:
             await flureeclient.new_db(db_id=dbase)
@@ -2049,7 +2122,8 @@ async def argparse_main():
         "db": "Name for the new database to deploy to.",
         "js": "Output a JavaScript module file instead of a JSON file",
         "roles": "Comma seperated list of roles to include in the domain-API artifact",
-        "force": "Overwrite output file if it already exists"
+        "force": "Overwrite output file if it already exists",
+        "stages": "Comma seperrated list of stages to run tests for. If none specified, then all tests will be run."
     }
     # pylint: enable=line-too-long
     defaults = {
@@ -2069,7 +2143,8 @@ async def argparse_main():
         "verbosefluree": False,
         "daemonize": False,
         "roles": "ALL",
-        "force": False
+        "force": False,
+        "stages": "ALL"
     }
     argsmap = {
         "artifact": {"output", "dir", "target", "verboseerrors"},
@@ -2083,7 +2158,8 @@ async def argparse_main():
             "network",
             "createkey",
             "keyfile",
-            "dockerfind"
+            "dockerfind",
+            "stages"
         },
         "deploy": {
             "dir",
@@ -2103,7 +2179,8 @@ async def argparse_main():
                        "network",
                        "linger",
                        "tag",
-                       "verbosefluree"},
+                       "verbosefluree",
+                       "stages"},
         "dockerdeploy": {"db", "dir", "target", "verboseerrors", "tag", "daemonize"},
         "dockerparams": {"tag"},
         "artifactdeploy": {"input:db", "host", "port", "createkey", "keyfile", "dockerfind"},
@@ -2113,7 +2190,8 @@ async def argparse_main():
                       "keyfile",
                       "linger",
                       "verbosefluree",
-                      "api"},
+                      "api",
+                      "stages"},
         "guestdeploy": {"db", "target", "verboseerrors", "keyfile", "linger", "verbosefluree"},
         "versioncheck": {"tag"},
         "dockerstart": {"tag"},
@@ -2187,7 +2265,8 @@ async def argparse_main():
             "daemonize",
             "js",
             "roles",
-            "force"
+            "force",
+            "stages"
         }
         for sc_arg in sc_args:
             for subarg in sc_arg.split(":"):
@@ -2231,7 +2310,8 @@ async def argparse_main():
                         port,
                         args.network,
                         createkey,
-                        args.api)
+                        args.api,
+                        args.stages)
     elif args.subcommand == "deploy":
         await deploy_main(args.dir,
                           args.target,
@@ -2247,7 +2327,8 @@ async def argparse_main():
                               args.tag,
                               args.verbosefluree,
                               args.linger,
-                              args.api)
+                              args.api,
+                              args.stages)
     elif args.subcommand == "dockerdeploy":
         await dockerdeploy_main(args.dir,
                                 args.target,
@@ -2261,7 +2342,8 @@ async def argparse_main():
                              args.verboseerrors,
                              args.network,
                              args.linger,
-                             createkey)
+                             createkey,
+                             args.stages)
     elif args.subcommand == "guestdeploy":
         await guestdeploy_main(args.target, args.verboseerrors, args.db, createkey)
     elif args.subcommand == "artifactdeploy":

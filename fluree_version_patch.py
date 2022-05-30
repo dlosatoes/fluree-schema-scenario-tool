@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 from pyparsing import nestedExpr, LineEnd
 
-VERSION = "0.4.5"
+VERSION = "0.4.8"
 
 def remove_comments(data):
     rval = list()
