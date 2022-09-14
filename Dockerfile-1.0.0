@@ -16,8 +16,7 @@ RUN mkdir -p /usr/src/fluree-ledger
 WORKDIR /usr/src/fluree-ledger
 
 
-COPY git_clone_fluree_latest_alpha.py /usr/src/git_clone_fluree_latest.py
-RUN ../git_clone_fluree_latest.py
+RUN /usr/bin/git clone --depth 1 --branch v1.0.0 https://github.com/fluree/ledger.git .
 COPY fluree_version_patch.py /usr/src/fluree-ledger
 RUN python3 ./fluree_version_patch.py
 RUN clojure -A:test -Stree

@@ -7,6 +7,7 @@ RUN apt-get update && \
     apt-get upgrade --yes && \
     apt-get --yes install apt-utils && \
     apt-get install --yes gcc && \
+    apt-get install --yes g++ && \
     # Some extra dependencies needed because we use the "slim" python image from docker.
     apt-get --yes install libgmp-dev && \
     apt-get --yes install unzip && \
@@ -18,7 +19,7 @@ RUN apt-get update && \
     python3 -m pip install pip --force && \
     # Dependencies of fsst tool
     python3 -m pip install base58 && \
-    python3 -m pip install aioflureedb && \
+    python3 -m pip install aioflureedb[domainapi] && \
     # Unzip the fluree zip file and remove the zip.
     cd /usr/src && \
     unzip fluree-latest.zip && \
