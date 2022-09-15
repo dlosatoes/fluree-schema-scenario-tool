@@ -16,7 +16,7 @@ import asyncio
 import itertools
 import importlib.util
 import requests
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -41,7 +41,6 @@ def runs_in_docker():
     except FileNotFoundError:
         pass
     return False
-
 
 try:
     import docker
@@ -2367,5 +2366,10 @@ async def argparse_main():
     else:
         print("ERROR: impossible subcommand:", args.subcommand)
 
-LOOP = asyncio.get_event_loop()
-LOOP.run_until_complete(argparse_main())
+
+def _main():
+    LOOP = asyncio.get_event_loop()
+    LOOP.run_until_complete(argparse_main())
+
+if __name__ == '__main__':
+    _main()
