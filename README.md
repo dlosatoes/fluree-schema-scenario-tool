@@ -24,25 +24,36 @@ If you have Docker installed, the following commands should also be available
 * [dockerdeploy](doc/dockerdeploy.MD): Start an *fsst* docker container and compile and deploy a FlureeDB schema from a [build target](buildtarget.MD), from within the container.
 * [dockertest](doc/dockertest.MD): Start an *fsst* docker container and run all unit tests for a [build target](buildtarget.MD) from within the container.
 
-### Dependencies
+### Install
 
-Prior to using the *fsst* tool, use *pip install* to install all dependencies.
-Note that these dependencies should not be needed if you only intent to use the unit-test (using docker) or the docker temp instance of Fluree.
+The easiers way to install fsst is the use of pip. There are four ways to install fsst.
 
-```bash
-python3 -m pip install base58 aioflureedb docker
+#### full install
+
+This should be the default as it enables all the subcommands you might want with full functionality.
+
+```sh
+python3 -m pip install fsst[docker,domainapi]
+```
+####
+
+#### Without the domain API
+
+```sh
+python3 -m pip install fsst[docker]
 ```
 
-It is important to note that as some dependencies are only needed for some subcommands, it is possible to run *fsst* without some of the dependencies installed, but doing so will disable several subcommands.
+#### Without support for docker sub commands
 
-If you plan to use the docker related sub commands, you should also fetch the relevant docker images from dockerhub. These are docker files containing both a version of FlureeDB and the latest version of the *fsst* tool.
-
-```bash
-docker pull pibara/fsst:stable
-docker pull pibara/fsst:beta
-docker pull pibara/fsst:alpha
+```sh
+python3 -m pip install fsst[docker,domainapi]
 ```
 
+### Minimal
+
+```sh
+python3 -m pip install fsst
+```
 ### Gitlab CICD
 
 For usage in a gitlab CICD pipeline, chack out [this page](doc/gitlabci.MD)
