@@ -16,7 +16,7 @@ import asyncio
 import itertools
 import importlib.util
 import requests
-VERSION = "0.5.1"
+VERSION = "0.5.2"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -1732,7 +1732,7 @@ async def dockertest_main(directory, target, verboseerrors,
                           network, tag, verbosefluree, linger, api, stages):
     """Main function for the dockertest subcommand"""
     # pylint: disable=too-many-arguments
-    cmd = "./fsst guesttest --target " + target + " --network " + network
+    cmd = "fsst guesttest --target " + target + " --network " + network
     if verboseerrors:
         cmd += " --verboseerrors"
     if verbosefluree:
@@ -1788,7 +1788,7 @@ async def versioncheck_main(tag):
     if match is None:
         print("ERROR: ", lookfor, "docker image not found")
         sys.exit(0)
-    cmd = "./fsst version"
+    cmd = "fsst version"
     name = "fsst-versioncheck-" + tag
     try:
         container = client.containers.run(match, cmd, detach=False, auto_remove=True, name=name)
@@ -1829,7 +1829,7 @@ async def versioncheck_main(tag):
 async def dockerdeploy_main(directory, target, verboseerrors, dbase, tag, verbosefluree, daemonize):
     """Main function for the dockerdeploy subcommand"""
     # pylint: disable=too-many-arguments
-    cmd = "./fsst guestdeploy " + dbase + " --target " + target + \
+    cmd = "fsst guestdeploy " + dbase + " --target " + target + \
           " --linger"
     if verboseerrors:
         cmd += " --verboseerrors"
