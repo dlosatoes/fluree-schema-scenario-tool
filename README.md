@@ -33,20 +33,20 @@ The easiers way to install fsst is the use of pip. There are four ways to instal
 This should be the default as it enables all the subcommands you might want with full functionality.
 
 ```sh
-python3 -m pip install fsst[docker,domainapi]
+python3 -m pip install 'fsst[docker,domainapi]'
 ```
 ####
 
 #### Without the domain API
 
 ```sh
-python3 -m pip install fsst[docker]
+python3 -m pip install 'fsst[docker]'
 ```
 
 #### Without support for docker sub commands
 
 ```sh
-python3 -m pip install fsst[domainapi]
+python3 -m pip install 'fsst[domainapi]'
 ```
 
 ### Minimal
