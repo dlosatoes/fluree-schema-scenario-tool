@@ -46,7 +46,7 @@ python3 -m pip install fsst[docker]
 #### Without support for docker sub commands
 
 ```sh
-python3 -m pip install fsst[docker,domainapi]
+python3 -m pip install fsst[domainapi]
 ```
 
 ### Minimal
