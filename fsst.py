@@ -666,7 +666,7 @@ async def process_fluree_testfile(database,
     if not isinstance(keys, list):
         key = keys
         keys = []
-        for transaction in transactions:
+        for trans in transactions:
             keys.append(key)
     if len(keys) == len(transactions):
         # If keys has the proper length, everyting is irie and we process all queries/transactions
@@ -674,25 +674,25 @@ async def process_fluree_testfile(database,
             key = keys[index]
             if key is None:
                 # Strip transactions of any "COMMENT" fields.
-                transaction = strip_comments_list(transaction)
+                trans = strip_comments_list(transaction)
                 # If the key is None, this is probably the prepare or the cleanup file,
                 #  run the transaction using the
                 #  priviledged signing key
-                await do_transaction(database, database, transaction, succeed)
+                await do_transaction(database, database, trans, succeed)
             else:
                 # Use the non-priv signing key for most operations
                 async with fdb(key["private"]) as database2:
                     if query:
                         # Strip all queries of any "COMMENT" fields.
-                        transaction = strip_comments_obj(transaction)
+                        trans = strip_comments_obj(transaction)
                         # Run the query with the non-priv signing key
-                        await do_query(database2, transaction, succeed)
+                        await do_query(database2, trans, succeed)
                     else:
                         # Strip transactions of any "COMMENT" fields.
-                        transaction = strip_comments_list(transaction)
+                        trans = strip_comments_list(transaction)
                         # Run the transaction using the priviledged signing key, use the priv
                         #  signing key for transaction probing.
-                        await do_transaction(database2, database, transaction, succeed)
+                        await do_transaction(database2, database, trans, succeed)
 
         print("      - Ran", len(transactions), " database ", ("transactions", "queries")[query])
     else:
@@ -753,8 +753,6 @@ async def run_test_scenario(database, subdir, fluree_parts, fdb, scenario):
                 tnokeys.append(users["keys"][idx])
         else:
             tnokeys = users["keys"][users["tno"]]
-    # Process the rest of the files of the test scenario.
-    #
     # Prepare transactions, these should at least create the users and give them the
     #  apropriate roles
     await process_fluree_testfile(database,
@@ -1308,6 +1306,9 @@ async def fluree_main(notest, network, host, port, output, createkey,
                 if os.path.isfile(testfile) and not notest and (allstages or subdir in teststages):
                     expanded2 = []
                     expanded2.append(maxblock)
+                    # Make up a database name for our test, using network and stage name.
+                    database = network + "/api_" + subdir
+                    database = "-".join(database.lower().split("_"))
                     print("- Database:", database)
                     print(" - collecting transactions from build subdirs")
                     # Run the test with transactions from all stages up to this one.
@@ -1366,9 +1367,6 @@ async def fluree_main(notest, network, host, port, output, createkey,
                             for key in role_data.keys():
                                 for val in role_data[key]:
                                     full_coverage[role].add(val)
-                        # Make up a database name for our test, using network and stage name.
-                        database = network + "/api_" + subdir
-                        database = "-".join(database.lower().split("_"))
                         test_list = []
                         for test in testsets:
                             if "api_role" in test:
@@ -1971,7 +1969,7 @@ def apiartifact_main(api, output_js, roles, output, force):
     # pylint: disable=too-many-branches, too-many-statements, too-many-locals
     """Main function of the apiartifact subcommand"""
     testdirs = [api]
-    for subdir in ["roles", "query", "transaction"]:
+    for subdir in ("roles", "query", "transaction"):
         testdirs.append(os.path.join(api, subdir))
     for path in testdirs:
         if not os.path.isdir(path):
@@ -2030,7 +2028,7 @@ def apiartifact_main(api, output_js, roles, output, force):
     obj["multi"] = {}
     obj["transaction"] = {}
     # pylint: disable=too-many-nested-blocks
-    for subdir in ["roles", "query", "transaction", "multi"]:
+    for subdir in ("roles", "query", "transaction", "multi"):
         fulldir = os.path.join(api, subdir)
         if os.path.isdir(fulldir):
             print(fulldir)
@@ -2055,7 +2053,7 @@ def apiartifact_main(api, output_js, roles, output, force):
                                     obj[subdir][name] = json.load(infil)
                                     if subdir == "query" and name not in obj["xform"]:
                                         obj["xform"][name] = "$"
-                        elif (subdir in ["query", "multi"] and
+                        elif (subdir in {"query", "multi"} and
                               ext.lower() == "xform" and
                               name in desired["queries"]):
                             with open(filepath) as infil:
@@ -2297,8 +2295,8 @@ async def argparse_main():
         return await artifact_main(args.output, args.dir, args.target, args.verboseerrors)
     createkey = args.createkey
     port = args.port
-    if args.subcommand in ["test", "deploy", "guesttest", "guestdeploy", "artifactdeploy"]:
-        startfluree = bool(args.subcommand in ["guesttest", "guestdeploy"])
+    if args.subcommand in {"test", "deploy", "guesttest", "guestdeploy", "artifactdeploy"}:
+        startfluree = bool(args.subcommand in {"guesttest", "guestdeploy"})
         createkey, port = await get_createkey_and_port(args.createkey,
                                                        args.keyfile,
                                                        args.dockerfind,
@@ -2368,8 +2366,8 @@ async def argparse_main():
 
 
 def _main():
-    LOOP = asyncio.get_event_loop()
-    LOOP.run_until_complete(argparse_main())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(argparse_main())
 
 if __name__ == '__main__':
     _main()
