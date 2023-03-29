@@ -16,7 +16,7 @@ import asyncio
 import itertools
 import importlib.util
 import requests
-VERSION = "0.5.2"
+VERSION = "0.5.5"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -399,9 +399,6 @@ async def filldb(host, port, dbase, key, transactions):
                                         host=host,
                                         port=port) as flureeclient:
         await flureeclient.health.ready()
-        fdb_version = await flureeclient.version()
-        if fdb_version[0] > "1":
-            raise RuntimeError("The fsst tool doesn't know how to create a database on version 2.x of FlureeDB")
         await flureeclient.new_db(db_id=dbase)
         fdb = await flureeclient[dbase]
         async with fdb(key) as database:
@@ -827,9 +824,6 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
             else:
                 dbase_name = dbase + "-" + str(test_index)
             # Create the new database for our tests
-            fdb_version = await flureeclient.version()
-            if fdb_version[0] > "1":
-                raise RuntimeError("The fsst tool doesn't know how to create a database on version 2.x of FlureeDB")
             await flureeclient.new_db(db_id=dbase_name)
             fdb = await flureeclient[dbase_name]
             # Database context
@@ -1053,8 +1047,6 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
                                     elif isinstance(is_ok, bool):
                                         if is_ok:
                                             print("     res=", is_ok)
-                                        elif warn_only:
-                                            print("    WARNING: res=", is_ok, "NOT EXPECTED")
                                         else:
                                             print("    ERROR: res=", is_ok, "NOT EXPECTED")
                                             raise RuntimeError(
@@ -1062,8 +1054,6 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
                                                 scenario + " at sub-test " + str(test_index))
                                     elif is_ok[0]:
                                         print("     res=", is_ok[0], is_ok[1])
-                                    elif warn_only:
-                                        print("    WARNING: res=", is_ok[0], "NOT EXPECTED",  is_ok[1])
                                     else:
                                         print("    ERROR: res=", is_ok[0], "NOT EXPECTED", is_ok[1])
                                         raise RuntimeError(
@@ -1117,9 +1107,6 @@ async def smartfunction_test(host, port, dbase, key, subdir, transactions, flure
         await flureeclient.health.ready()
         print("Server ready, creating database", dbase)
         # Create the new database for our tests
-        fdb_version = await flureeclient.version()
-        if fdb_version[0] > "1":
-            raise RuntimeError("The fsst tool doesn't know how to create a database on version 2.x of FlureeDB")
         await flureeclient.new_db(db_id=dbase)
         print("Database created")
         fdb = await flureeclient[dbase]
@@ -1891,9 +1878,6 @@ async def artifactdeploy_main(inputfile, dbase, host, port, createkey):
                                         host=host,
                                         port=port) as flureeclient:
         await flureeclient.health.ready()
-        fdb_version = await flureeclient.version()
-        if fdb_version[0] > "1":
-            raise RuntimeError("The fsst tool doesn't know how to create a database on version 2.x of FlureeDB")
         # Create the new database for our tests
         try:
             await flureeclient.new_db(db_id=dbase)
@@ -2138,9 +2122,9 @@ async def argparse_main():
         "network": netname,
         "createkey": None,
         "keyfile": None,
-        "dockerfind": "beta",
+        "dockerfind": "stable",
         "linger": False,
-        "tag": "beta",
+        "tag": "stable",
         "verbosefluree": False,
         "daemonize": False,
         "roles": "ALL",
