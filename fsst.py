@@ -30,17 +30,7 @@ if not CRYPTO_OK:
 
 def runs_in_docker():
     """Check if we are running inside of docker"""
-    try:
-        with open("/proc/1/cgroup") as cgrp:
-            # Read the cgroup file if on Linux
-            cgrplines = cgrp.read().split("\n")[:-1]
-            # Count the occurences of "/", should only be one or two when in docker.
-            cnt = [line.split(":")[2] for line in cgrplines].count("/")
-        if cnt < 3:
-            return True
-    except FileNotFoundError:
-        pass
-    return False
+    return os.path.isdir("/usr/src/fsst/fluree_parts")
 
 try:
     import docker
@@ -50,7 +40,7 @@ except ModuleNotFoundError:
         print("         - docker related commands disabled.")
     DOCKER_OK = False
 
-
+# pylint: disable=consider-using-namedtuple-or-dataclass
 AUTHMAP = {
     "auth00": ["TexyZ1iY2m8iHQoAGxvFd3e9ixWeUUjHdcG",
                "88a88244d7c7773f2378cd7adf37756c79171dea5f39588baf9b24b718317de9"],
@@ -474,7 +464,7 @@ async def do_transaction(database, rdatabase, transaction, succeed):
         If a transaction or query fails where it wasn't expected to or succeeds when it was
          expected to fail.
     """
-    # pylint: disable=too-many-branches, too-many-statements
+    # pylint: disable=too-many-branches, too-many-statements, too-many-try-statements, while-used
     try:
         try:
             # Transact without waiting for the result, we'll loop for that later
@@ -600,7 +590,7 @@ async def do_query(database, query, succeed):
     if response0 and not response:
         print("        - NOTE: Non-empty response treated as functionally empty (only _id fields)")
     # On success we expect a non-empty result
-    if succeed and len(response) == 0:
+    if succeed and response:
         print("Empty response on YES query")
         print(json.dumps(query, indent=4, sort_keys=True))
         raise RuntimeError("Empty response to YES query.")
@@ -669,6 +659,7 @@ async def process_fluree_testfile(database,
         # If keys has the proper length, everyting is irie and we process all queries/transactions
         for index, transaction in enumerate(transactions):
             key = keys[index]
+            # pylint: disable=consider-using-assignment-expr
             if key is None:
                 # Strip transactions of any "COMMENT" fields.
                 trans = strip_comments_list(transaction)
@@ -819,10 +810,7 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
             print(" ###", current_test["doc"], "###")
             coverage_treshold = current_test["coverage"]
             coverage = 0
-            if test_index == 0:
-                dbase_name = dbase
-            else:
-                dbase_name = dbase + "-" + str(test_index)
+            dbase_name = dbase if test_index == 0 else dbase + "-" + str(test_index) # pylint: disable=compare-to-zero
             # Create the new database for our tests
             await flureeclient.new_db(db_id=dbase_name)
             fdb = await flureeclient[dbase_name]
@@ -985,12 +973,13 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
                                 methods = []
                                 go_on = True
                                 idx = 0
-                                while go_on:
+                                while go_on: # pylint: disable=while-used
                                     if getattr(tester, 'run_test_' + subtest_name + '_idx',
                                                None) is None:
                                         go_on = False
                                     else:
                                         methods.append('run_test_' + subtest_name + "_idx")
+                                    # pylint: disable=compare-to-zero
                                     if (not go_on and idx == 0 and getattr(tester, 'run_test_' +
                                                                            subtest_name, None) is not
                                             None):
@@ -1035,7 +1024,7 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
                                 index = 1
                                 scenario = "scenario" + str(index)
                                 scenario_method = getattr(tester, scenario, None)
-                                while scenario_method is not None:
+                                while scenario_method is not None: # pylint: disable=while-used
                                     # pylint: disable=broad-except
                                     try:
                                         is_ok = await scenario_method(role_api, test_api)
@@ -1500,7 +1489,7 @@ async def fluree_main(notest, network, host, port, output, createkey,
             database = "-".join(database.lower().split("_"))
             await filldb(host, port, database, createkey, expanded)
             print("Deployed", fluree_parts, "target", target, "to", database, "on", host)
-        elif testcount == 0:
+        elif testcount == 0: # pylint: disable=compare-to-zero
             print("WARNING: build target has no tests defined")
         return True
     except (RuntimeError, aioflureedb.FlureeException) as exp:
@@ -1529,7 +1518,7 @@ def get_container_info(container):
                     if "HostPort" in binding:
                         hostport = binding["HostPort"]
     command_result = container.exec_run("cat default-private-key.txt")
-    if command_result.exit_code == 0:
+    if command_result.exit_code == 0: # pylint: disable=compare-to-zero
         createkey = command_result.output.decode()
     return hostport, createkey
 
@@ -1545,7 +1534,7 @@ def get_from_docker(tag):
     return hostport, createkey
 
 
-def run_in_docker(tag, command, directory, daemonize, expose, api="apimap"):
+def run_in_docker(tag, command, directory, daemonize, expose, api="apimap", debug=False):
     """Run a given command in a new docker container"""
     # pylint: disable=too-many-locals, too-many-statements, too-many-branches, too-many-arguments
     print("COMMAND:", command)
@@ -1582,8 +1571,11 @@ def run_in_docker(tag, command, directory, daemonize, expose, api="apimap"):
             ports["8090/tcp"] = 8090
         else:
             ports["8090/tcp"] = 8090
+    environment = {}
+    if debug:
+        environment["AIOFLUREEDB_DEBUG"] = "TRUE"
     try:
-        container = client.containers.run(match, command, mounts=mounts,
+        container = client.containers.run(match, command, mounts=mounts, environment=environment,
                                           ports=ports, detach=True, auto_remove=True, name=name)
     except docker.errors.APIError as exp:
         print("ERROR: Problem starting docker container OR issue binding to 8090")
@@ -1599,7 +1591,7 @@ def run_in_docker(tag, command, directory, daemonize, expose, api="apimap"):
             sline = line.decode().replace("\r", "").replace("\n", "")
             if not daemonize:
                 print(sline, flush=True)
-            if sline == "LINGER == True" and browser_triggered is False:
+            if sline == "LINGER == True" and browser_triggered is False: # pylint: disable=compare-to-zero
                 webbrowser.open("http://localhost:8090/")
                 browser_triggered = True
                 if daemonize:
@@ -1625,7 +1617,7 @@ async def get_createkey_and_port(createkey, keyfile, dockerfind,
             # pylint: disable=consider-using-with
             subprocess.Popen(command)
         times = 0
-        while not rval:
+        while not rval: # pylint: disable=while-used
             try:
                 with open("./default-private-key.txt") as kfile:
                     rval = kfile.read()
@@ -1714,7 +1706,7 @@ async def deploy_main(directory, target, verboseerrors, host, port, network, cre
 
 
 async def dockertest_main(directory, target, verboseerrors,
-                          network, tag, verbosefluree, linger, api, stages):
+                          network, tag, verbosefluree, linger, api, stages, debug):
     """Main function for the dockertest subcommand"""
     # pylint: disable=too-many-arguments
     cmd = "fsst guesttest --target " + target + " --network " + network
@@ -1725,7 +1717,7 @@ async def dockertest_main(directory, target, verboseerrors,
     if linger:
         cmd += " --linger"
     cmd += " --stages " + stages
-    return run_in_docker(tag, cmd, directory, False, linger, api=api)
+    return run_in_docker(tag, cmd, directory, False, linger, api=api, debug=debug)
 
 
 async def dockerstart_main(tag):
@@ -1811,7 +1803,7 @@ async def versioncheck_main(tag):
     return
 
 
-async def dockerdeploy_main(directory, target, verboseerrors, dbase, tag, verbosefluree, daemonize):
+async def dockerdeploy_main(directory, target, verboseerrors, dbase, tag, verbosefluree, daemonize, debug):
     """Main function for the dockerdeploy subcommand"""
     # pylint: disable=too-many-arguments
     cmd = "fsst guestdeploy " + dbase + " --target " + target + \
@@ -1820,7 +1812,7 @@ async def dockerdeploy_main(directory, target, verboseerrors, dbase, tag, verbos
         cmd += " --verboseerrors"
     if verbosefluree or not daemonize:
         cmd += " --verbosefluree"
-    return run_in_docker(tag, cmd, directory, daemonize, True)
+    return run_in_docker(tag, cmd, directory, daemonize, True, debug=debug)
 
 
 async def guesttest_main(target, verboseerrors, network, linger, createkey, stages):
@@ -1840,7 +1832,7 @@ async def guesttest_main(target, verboseerrors, network, linger, createkey, stag
     if linger:
         print("LINGER == True")
         count = 0
-        while True:
+        while True: # pylint: disable=while-used
             await asyncio.sleep(30)
             count += 1
             print('LINGER', count, flush=True)
@@ -1911,7 +1903,7 @@ async def dockerparams_main(tag):
     echo = container.exec_run("cat default-private-key.txt")
     createkey = None
     port = None
-    if echo.exit_code == 0:
+    if echo.exit_code == 0: # pylint: disable=compare-to-zero
         createkey = echo.output.decode()
     if ("HostConfig" in container.attrs and
             "PortBindings" in container.attrs["HostConfig"] and
@@ -1941,7 +1933,7 @@ async def guestdeploy_main(target, verboseerrors, dbase, createkey):
         is_ok = await artifactdeploy_main("artifact.json", dbase, "localhost", prt, createkey)
     print("LINGER == True")
     count = 0
-    while True:
+    while True: # pylint: disable=while-used
         await asyncio.sleep(30)
         count += 1
         print('LINGER', count, flush=True)
@@ -2108,7 +2100,8 @@ async def argparse_main():
         "js": "Output a JavaScript module file instead of a JSON file",
         "roles": "Comma seperated list of roles to include in the domain-API artifact",
         "force": "Overwrite output file if it already exists",
-        "stages": "Comma seperrated list of stages to run tests for. If none specified, then all tests will be run."
+        "stages": "Comma seperrated list of stages to run tests for. If none specified, then all tests will be run.",
+        "debug": "Run aioflureedb in debug mode"
     }
     # pylint: enable=line-too-long
     defaults = {
@@ -2129,7 +2122,8 @@ async def argparse_main():
         "daemonize": False,
         "roles": "ALL",
         "force": False,
-        "stages": "ALL"
+        "stages": "ALL",
+        "debug": False
     }
     argsmap = {
         "artifact": {"output", "dir", "target", "verboseerrors"},
@@ -2165,8 +2159,9 @@ async def argparse_main():
                        "linger",
                        "tag",
                        "verbosefluree",
-                       "stages"},
-        "dockerdeploy": {"db", "dir", "target", "verboseerrors", "tag", "daemonize"},
+                       "stages",
+                       "debug"},
+        "dockerdeploy": {"db", "dir", "target", "verboseerrors", "tag", "daemonize", "debug"},
         "dockerparams": {"tag"},
         "artifactdeploy": {"input:db", "host", "port", "createkey", "keyfile", "dockerfind"},
         "guesttest": {"target",
@@ -2251,7 +2246,8 @@ async def argparse_main():
             "js",
             "roles",
             "force",
-            "stages"
+            "stages",
+            "debug"
         }
         for sc_arg in sc_args:
             for subarg in sc_arg.split(":"):
@@ -2313,7 +2309,8 @@ async def argparse_main():
                               args.verbosefluree,
                               args.linger,
                               args.api,
-                              args.stages)
+                              args.stages,
+                              args.debug)
     elif args.subcommand == "dockerdeploy":
         await dockerdeploy_main(args.dir,
                                 args.target,
@@ -2321,7 +2318,8 @@ async def argparse_main():
                                 args.db,
                                 args.tag,
                                 args.verbosefluree,
-                                args.daemonize)
+                                args.daemonize,
+                                args.debug)
     elif args.subcommand == "guesttest":
         await guesttest_main(args.target,
                              args.verboseerrors,
