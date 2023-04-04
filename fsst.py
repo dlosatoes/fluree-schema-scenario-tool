@@ -389,7 +389,7 @@ async def filldb(host, port, dbase, key, transactions):
                                         host=host,
                                         port=port) as flureeclient:
         await flureeclient.health.ready()
-        await flureeclient.new_db(db_id=dbase)
+        await flureeclient.new_ledger(ledger_id=dbase)
         fdb = await flureeclient[dbase]
         async with fdb(key) as database:
             await database.ready()
@@ -812,7 +812,7 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
             coverage = 0
             dbase_name = dbase if test_index == 0 else dbase + "-" + str(test_index) # pylint: disable=compare-to-zero
             # Create the new database for our tests
-            await flureeclient.new_db(db_id=dbase_name)
+            await flureeclient.new_ledger(ledger_id=dbase_name)
             fdb = await flureeclient[dbase_name]
             # Database context
             async with fdb(key) as database:
@@ -1096,7 +1096,7 @@ async def smartfunction_test(host, port, dbase, key, subdir, transactions, flure
         await flureeclient.health.ready()
         print("Server ready, creating database", dbase)
         # Create the new database for our tests
-        await flureeclient.new_db(db_id=dbase)
+        await flureeclient.new_ledger(ledger_id=dbase)
         print("Database created")
         fdb = await flureeclient[dbase]
         print("Database handle fetched")
@@ -1872,7 +1872,7 @@ async def artifactdeploy_main(inputfile, dbase, host, port, createkey):
         await flureeclient.health.ready()
         # Create the new database for our tests
         try:
-            await flureeclient.new_db(db_id=dbase)
+            await flureeclient.new_ledger(ledger_id=dbase)
         except aioflureedb.FlureeHttpError as exp:
             print("ERROR: Problem creating the database for deploy")
             print("      ", json.loads(exp.args[0])["message"])
