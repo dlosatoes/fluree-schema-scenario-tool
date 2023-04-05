@@ -389,7 +389,12 @@ async def filldb(host, port, dbase, key, transactions):
                                         host=host,
                                         port=port) as flureeclient:
         await flureeclient.health.ready()
-        await flureeclient.new_ledger(ledger_id=dbase)
+        ledger_key = await flureeclient.new_ledger(ledger_id=dbase)
+        if isinstance(ledger_key, str) and len(ledger_key) == 64:
+            key = ledger_key
+            print("DEBUG: swapping provided with just genated Fluree 2.0 private key, experimental")
+        else:
+            print("DEBUG:", type(ledger_key), ledger_key)
         fdb = await flureeclient[dbase]
         async with fdb(key) as database:
             await database.ready()
@@ -401,6 +406,7 @@ async def filldb(host, port, dbase, key, transactions):
                     print(json.dumps(transaction, indent=4, sort_keys=True))
                     print()
                     raise exp
+    return key
 
 
 def strip_comments_obj(operation):
@@ -812,7 +818,12 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
             coverage = 0
             dbase_name = dbase if test_index == 0 else dbase + "-" + str(test_index) # pylint: disable=compare-to-zero
             # Create the new database for our tests
-            await flureeclient.new_ledger(ledger_id=dbase_name)
+            ledger_key = await flureeclient.new_ledger(ledger_id=dbase_name)
+            if isinstance(ledger_key, str) and len(ledger_key) == 64:
+                key = ledger_key
+                print("DEBUG: swapping provided with just genated Fluree 2.0 private key, experimental")
+            else:
+                print("DEBUG:", type(ledger_key), ledger_key
             fdb = await flureeclient[dbase_name]
             # Database context
             async with fdb(key) as database:
@@ -1096,7 +1107,12 @@ async def smartfunction_test(host, port, dbase, key, subdir, transactions, flure
         await flureeclient.health.ready()
         print("Server ready, creating database", dbase)
         # Create the new database for our tests
-        await flureeclient.new_ledger(ledger_id=dbase)
+        ledger_key = await flureeclient.new_ledger(ledger_id=dbase)
+        if isinstance(ledger_key, str) and len(ledger_key) == 64:
+            key = ledger_key
+            print("DEBUG: swapping provided with just genated Fluree 2.0 private key, experimental")
+        else:
+            print("DEBUG:", type(ledger_key), ledger_key
         print("Database created")
         fdb = await flureeclient[dbase]
         print("Database handle fetched")
@@ -1487,8 +1503,9 @@ async def fluree_main(notest, network, host, port, output, createkey,
             # list.
             database = network + "/" + target
             database = "-".join(database.lower().split("_"))
-            await filldb(host, port, database, createkey, expanded)
-            print("Deployed", fluree_parts, "target", target, "to", database, "on", host)
+            key = await filldb(host, port, database, createkey, expanded)
+            print("Deployed", fluree_parts, "target", target, "to", database, "on", host,
+                    "with key", key)
         elif testcount == 0: # pylint: disable=compare-to-zero
             print("WARNING: build target has no tests defined")
         return True
@@ -1872,7 +1889,10 @@ async def artifactdeploy_main(inputfile, dbase, host, port, createkey):
         await flureeclient.health.ready()
         # Create the new database for our tests
         try:
-            await flureeclient.new_ledger(ledger_id=dbase)
+            ledger_key = await flureeclient.new_ledger(ledger_id=dbase)
+            if isinstance(ledger_key, str) and len(ledger_key) == 64:
+                createkey = ledger_key
+                print("DEBUG: swapping provided with just genated Fluree 2.0 private key, experimental")
         except aioflureedb.FlureeHttpError as exp:
             print("ERROR: Problem creating the database for deploy")
             print("      ", json.loads(exp.args[0])["message"])
