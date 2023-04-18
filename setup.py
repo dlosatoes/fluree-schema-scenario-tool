@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='fsst',
-    version="0.6.7",
+    version="0.8.0",
     description="Fluree Schema Scenario Tool",
     long_description="Testing tool for schema and smart function unit tests for FlureeDB",
     author='Rob Meijer',

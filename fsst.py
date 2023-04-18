@@ -16,7 +16,7 @@ import asyncio
 import itertools
 import importlib.util
 import requests
-VERSION = "0.6.7"
+VERSION = "0.8.0"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
