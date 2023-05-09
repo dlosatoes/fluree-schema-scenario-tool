@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='fsst',
-    version="0.8.1",
+    version="0.8.2",
     description="Fluree Schema Scenario Tool",
     long_description="Testing tool for schema and smart function unit tests for FlureeDB",
     author='Rob Meijer',
@@ -29,6 +29,6 @@ setup(
         'Programming Language :: Python :: 3',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
-    install_requires=["base58", "aioflureedb>=0.6.4", "requests"],
+    install_requires=["base58", "aioflureedb>=0.6.4", "requests<=2.28.1"],
     extras_require={'domainapi': ['jsonata>=0.2.3'], 'docker': ['docker']}
 )
