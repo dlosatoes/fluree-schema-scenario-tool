@@ -16,7 +16,7 @@ import asyncio
 import itertools
 import importlib.util
 import requests
-VERSION = "0.8.1"
+VERSION = "0.8.6"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -1128,7 +1128,7 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
                                        current_test["test"])
 
 
-async def smartfunction_test(host, port, dbase, key, subdir, transactions, fluree_parts):
+async def smartfunction_test(host, port, dbase, key, subdir, transactions, fluree_parts, run=0):
     """Create a test database, initialize database with transactions up to stage and run all
        tests for stage.
 
@@ -1164,7 +1164,8 @@ async def smartfunction_test(host, port, dbase, key, subdir, transactions, flure
         await flureeclient.health.ready()
         print("Server ready, creating database", dbase)
         # Create the new database for our tests
-        await flureeclient.new_ledger(ledger_id=dbase)
+        if run == 0:
+            await flureeclient.new_ledger(ledger_id=dbase)
         print("Database created")
         fdb = await flureeclient[dbase]
         print("Database handle fetched")
@@ -1174,16 +1175,17 @@ async def smartfunction_test(host, port, dbase, key, subdir, transactions, flure
             await database.ready()
             print("Database ready")
             # Run all the transactions in preparation to the tests
-            print(" - processing schema transaction sub-set")
-            for transaction in transactions:
-                try:
-                    await database.command.transaction(transaction)
-                except aioflureedb.FlureeException as exp:
-                    print("Exception while processing schema transaction")
-                    print(json.dumps(transaction, indent=4, sort_keys=True))
-                    print()
-                    raise exp
-            print(" - ok, completed", len(transactions), "transactions on", dbase)
+            if run == 0:
+                print(" - processing schema transaction sub-set")
+                for transaction in transactions:
+                    try:
+                        await database.command.transaction(transaction)
+                    except aioflureedb.FlureeException as exp:
+                        print("Exception while processing schema transaction")
+                        print(json.dumps(transaction, indent=4, sort_keys=True))
+                        print()
+                        raise exp
+                print(" - ok, completed", len(transactions), "transactions on", dbase)
             # Read the test scenario config file for this stage.
             with open(os.path.join(fluree_parts, subdir, "test.json")) as testscenariosfile:
                 testscenarios = json.load(testscenariosfile)
@@ -1264,17 +1266,20 @@ async def fluree_main(notest, network, host, port, output, createkey,
         hooks = Hooks()
         hooks.before()
         for run in range(0, runs):
-            if run > 1 and fluree_process is not None:
-                fluree_process.terminate()
-                wait_for_flureedb_to_terminate()
-                hooks.between()
-                command = ["/bin/bash", "/usr/src/fsst/fluree_start.sh", "-Dfdb-api-port=8090"]
-                if not verbosefluree:
-                    # pylint: disable=consider-using-with
-                    fluree_process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if run > 0:
+                if fluree_process is None:
+                    print("ERROR: No fluree process to restart")
                 else:
-                    # pylint: disable=consider-using-with
-                    fluree_process = subprocess.Popen(command)
+                    fluree_process.terminate()
+                    wait_for_flureedb_to_terminate()
+                    hooks.between()
+                    command = ["/bin/bash", "/usr/src/fsst/fluree_start.sh", "-Dfdb-api-port=8090"]
+                    if not verbosefluree:
+                        # pylint: disable=consider-using-with
+                        fluree_process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    else:
+                        # pylint: disable=consider-using-with
+                        fluree_process = subprocess.Popen(command)
             maxstage = 0
             # Outer loop for finding out where and how far to run the inner loop.
             # pylint: disable=too-many-nested-blocks
@@ -1356,7 +1361,8 @@ async def fluree_main(notest, network, host, port, output, createkey,
                                                      createkey,
                                                      build[maxstage],
                                                      expanded2,
-                                                     fluree_parts)
+                                                     fluree_parts,
+                                                     run=run)
                         else:
                             print("Skipping tests for", build[maxstage])
                     # If notest is false and the stage has a domain.json,
