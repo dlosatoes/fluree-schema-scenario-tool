@@ -133,7 +133,7 @@ class Hooks:
     """Helper class for running hooks between runs"""
     def __init__(self):
         self.hookmodule = None
-        self.hook = None
+        self.hooks = None
         is_ok = False
         hookmodpath = os.path.join("hooks", "hooks.py")
         if os.path.exists(hookmodpath):
@@ -146,35 +146,35 @@ class Hooks:
                 print("Problem imorting hooks: ", hookmodpath)
                 self.hookmodule = None
             if is_ok:
-                self.hooks = getattr(self.hooksmodule, "Hooks", None)
+                self.hooks = getattr(self.hookmodule, "Hooks", None)
                 if self.hooks is None:
                     print("ERROR: No Hooks in hooks file")
                     is_ok = False
             if is_ok:
                 for method in ("before", "between", "after"):
-                    if getattr(self.hook, method, None) is None:
+                    if getattr(self.hooks, method, None) is None:
                         print("ERROR: missing hook: ", method)
                         is_ok = False
             if not is_ok:
-                self.hook = None
+                self.hooks = None
                 self.hookmodule = None
         else:
             print("WARNING: No hooks file found: ", hookmodpath)
 
     def before(self):
         """Before hook"""
-        if self.hook:
-            self.hook.before()
+        if self.hooks:
+            self.hooks.before()
 
     def between(self):
         """In between hook"""
-        if self.hook:
-            self.hook.between()
+        if self.hooks:
+            self.hooks.between()
 
     def after(self):
         """After hook"""
-        if self.hook:
-            self.hook.after()
+        if self.hooks:
+            self.hooks.after()
 
 class FlushFile:
     """Helper class for file like objects to always flush on write"""
