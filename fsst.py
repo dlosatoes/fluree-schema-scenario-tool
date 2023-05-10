@@ -16,7 +16,7 @@ import asyncio
 import itertools
 import importlib.util
 import requests
-VERSION = "0.8.8"
+VERSION = "0.8.9"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -869,6 +869,7 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
 
     """
     # pylint: disable=too-many-locals, too-many-arguments
+    print("domain API test, run =", run)
     # Fluree host context, using priviledged (root role) default key.
     async with aioflureedb.FlureeClient(masterkey=key, host=host,
                                         port=port) as flureeclient:
@@ -881,6 +882,7 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
             dbase_name = dbase if test_index == 0 else dbase + "-" + str(test_index) # pylint: disable=compare-to-zero
             if run:
                 dbase_name += "-" + str(run)
+            print("- dbase =", dbase_name)
             # Create the new database for our tests
             await flureeclient.new_ledger(ledger_id=dbase_name)
             fdb = await flureeclient[dbase_name]
@@ -1268,6 +1270,7 @@ async def fluree_main(notest, network, host, port, output, createkey,
         hooks = Hooks()
         hooks.before()
         for run in range(0, runs):
+            print("RUN:", run)
             if run > 0:
                 if fluree_process is None:
                     print("ERROR: No fluree process to restart")
@@ -1564,11 +1567,12 @@ async def fluree_main(notest, network, host, port, output, createkey,
                                                  expanded2,
                                                  api,
                                                  apimap_modules,
-                                                 run)
+                                                 run=run)
                         else:
                             print("WARNING: Skipping apimap tests because apimap dir is missing or",
                                   "incomplete:", api)
                 maxstage += 1
+            print("RUN completed:", run)
         hooks.after()
         if output:
             # Write the expanded transaction list for all stages combined to a single artifact.
