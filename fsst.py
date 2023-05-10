@@ -15,8 +15,8 @@ import time
 import asyncio
 import itertools
 import importlib.util
-import requests
-VERSION = "0.8.9"
+# import requests
+VERSION = "0.8.10"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -2500,4 +2500,5 @@ def _main():
     loop.run_until_complete(argparse_main())
 
 if __name__ == '__main__':
+    import requests
     _main()
