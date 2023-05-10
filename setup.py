@@ -1,8 +1,9 @@
 from setuptools import setup
+from fsst import VERSION
 
 setup(
     name='fsst',
-    version="0.8.6",
+    version=VERSION,
     description="Fluree Schema Scenario Tool",
     long_description="Testing tool for schema and smart function unit tests for FlureeDB",
     author='Rob Meijer',

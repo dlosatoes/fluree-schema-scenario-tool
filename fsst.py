@@ -16,7 +16,7 @@ import asyncio
 import itertools
 import importlib.util
 import requests
-VERSION = "0.8.6"
+VERSION = "0.8.7"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -844,7 +844,7 @@ async def run_test_scenario(database, subdir, fluree_parts, fdb, scenario):
                                   os.path.join(testdir, "cleanup.json"))
 
 
-async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, api_modules):
+async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, api_modules, run=0):
     # pylint: disable=too-many-statements, too-many-branches
     """Create a test database, initialize database with transactions up to stage and run all
        domain-API tests for stage.
@@ -879,6 +879,8 @@ async def domainapi_test(host, port, dbase, key, tests, transactions, api_dir, a
             coverage_treshold = current_test["coverage"]
             coverage = 0
             dbase_name = dbase if test_index == 0 else dbase + "-" + str(test_index) # pylint: disable=compare-to-zero
+            if run:
+                dbase_name += "-" + str(run)
             # Create the new database for our tests
             await flureeclient.new_ledger(ledger_id=dbase_name)
             fdb = await flureeclient[dbase_name]
@@ -1164,7 +1166,7 @@ async def smartfunction_test(host, port, dbase, key, subdir, transactions, flure
         await flureeclient.health.ready()
         print("Server ready, creating database", dbase)
         # Create the new database for our tests
-        if run == 0:
+        if not run:
             await flureeclient.new_ledger(ledger_id=dbase)
         print("Database created")
         fdb = await flureeclient[dbase]
@@ -1175,7 +1177,7 @@ async def smartfunction_test(host, port, dbase, key, subdir, transactions, flure
             await database.ready()
             print("Database ready")
             # Run all the transactions in preparation to the tests
-            if run == 0:
+            if not run:
                 print(" - processing schema transaction sub-set")
                 for transaction in transactions:
                     try:
@@ -1561,7 +1563,8 @@ async def fluree_main(notest, network, host, port, output, createkey,
                                                  test_list,
                                                  expanded2,
                                                  api,
-                                                 apimap_modules)
+                                                 apimap_modules,
+                                                 run)
                         else:
                             print("WARNING: Skipping apimap tests because apimap dir is missing or",
                                   "incomplete:", api)
