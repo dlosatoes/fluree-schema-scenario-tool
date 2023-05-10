@@ -16,7 +16,7 @@ import asyncio
 import itertools
 import importlib.util
 import requests
-VERSION = "0.8.7"
+VERSION = "0.8.8"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -1166,8 +1166,9 @@ async def smartfunction_test(host, port, dbase, key, subdir, transactions, flure
         await flureeclient.health.ready()
         print("Server ready, creating database", dbase)
         # Create the new database for our tests
-        if not run:
-            await flureeclient.new_ledger(ledger_id=dbase)
+        if run:
+            dbase += "-" + str(run)
+        await flureeclient.new_ledger(ledger_id=dbase)
         print("Database created")
         fdb = await flureeclient[dbase]
         print("Database handle fetched")
@@ -1177,17 +1178,16 @@ async def smartfunction_test(host, port, dbase, key, subdir, transactions, flure
             await database.ready()
             print("Database ready")
             # Run all the transactions in preparation to the tests
-            if not run:
-                print(" - processing schema transaction sub-set")
-                for transaction in transactions:
-                    try:
-                        await database.command.transaction(transaction)
-                    except aioflureedb.FlureeException as exp:
-                        print("Exception while processing schema transaction")
-                        print(json.dumps(transaction, indent=4, sort_keys=True))
-                        print()
-                        raise exp
-                print(" - ok, completed", len(transactions), "transactions on", dbase)
+            print(" - processing schema transaction sub-set")
+            for transaction in transactions:
+                try:
+                    await database.command.transaction(transaction)
+                except aioflureedb.FlureeException as exp:
+                    print("Exception while processing schema transaction")
+                    print(json.dumps(transaction, indent=4, sort_keys=True))
+                    print()
+                    raise exp
+            print(" - ok, completed", len(transactions), "transactions on", dbase)
             # Read the test scenario config file for this stage.
             with open(os.path.join(fluree_parts, subdir, "test.json")) as testscenariosfile:
                 testscenarios = json.load(testscenariosfile)
