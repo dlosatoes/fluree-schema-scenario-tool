@@ -16,7 +16,7 @@ import asyncio
 import itertools
 import importlib.util
 # import requests
-VERSION = "0.8.10"
+VERSION = "0.8.11"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -1725,7 +1725,11 @@ async def get_createkey_and_port(createkey, keyfile, dockerfind,
                 with open("./default-private-key.txt") as kfile:
                     rval = kfile.read()
             except FileNotFoundError:
-                print("# waiting for default-private-key.txt to appear")
+                try:
+                    with open("/var/lib/fluree/default-private-key.txt") as kfile:
+                        rval = kfile.read()
+                except FileNotFoundError:
+                    print("# waiting for default-private-key.txt to appear")
             await asyncio.sleep(6)
             times += 1
             if times > 40:
