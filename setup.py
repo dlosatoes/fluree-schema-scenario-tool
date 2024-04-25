@@ -8,7 +8,7 @@ setup(
     long_description="Testing tool for schema and smart function unit tests for FlureeDB",
     author='Rob Meijer',
     author_email='pibara@gmail.com',
-    url='https://github.com/pibara/fluree-schema-scenario-tool',
+    url='https://github.com/dlosatoes/fluree-schema-scenario-tool',
     license='BSD',
     py_modules=['fsst'],
     include_package_data=True,

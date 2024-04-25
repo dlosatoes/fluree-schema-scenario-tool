@@ -15,8 +15,8 @@ import time
 import asyncio
 import itertools
 import importlib.util
-# import requests
-VERSION = "0.8.11"
+import requests
+VERSION = "0.8.12"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -1594,13 +1594,50 @@ async def fluree_main(notest, network, host, port, output, createkey,
         return False
 
 
+def get_local_docker_image(client, tag):
+    """Get local fsst docker image by tag"""
+    imgmatch = None
+    for dhaccount in ("dlosatoes", "pibara", "fluree"):
+        if imgmatch is None:
+            lookfor = dhaccount + "/fsst:" + tag
+            for image in client.images.list():
+                for repotag in image.attrs["RepoTags"]:
+                    if repotag == lookfor:
+                        imgmatch = image
+                        print("Docker image found locally:", lookfor)
+                        return imgmatch, lookfor
+    return None, None
+
+def get_dockerhub_docker_image(client, tag):
+    """Find and download docker image from docker hub by tag"""
+    imgmatch = None
+    for dhaccount in ("dlosatoes", "pibara", "fluree"):
+        lookfor = dhaccount + "/fsst:" + tag
+        lookfor2 = dhaccount + "/fsst"
+        try:
+            imgmatch = client.images.pull(lookfor2, tag=tag)
+            print("  - Fetched", lookfor, "from docker hub")
+            return imgmatch, lookfor
+        except requests.exceptions.HTTPError:
+            print("  -", lookfor, "not found on docker hub")
+    return None, None
+
+def get_docker_image(client, tag):
+    """Try to find docker image by tag locally, if not found try to fetch it from docker hub"""
+    imgmatch, imgname = get_local_docker_image(client, tag)
+    if imgmatch is None or imgname is None:
+        print("NOTICE: fsst", tag, "not found locally, looking on docker hub.")
+        imgmatch, imgname = get_dockerhub_docker_image(client, tag)
+    return imgmatch, imgname
+
 def get_running_docker(client, tag):
     """Get the running docker"""
-    name = "pibara/fsst:" + tag
-    for container in client.containers.list():
-        for ttag in container.image.attrs["RepoTags"]:
-            if ttag == name:
-                return container
+    for dhaccount in ("dlosatoes", "pibara", "fluree"):
+        name = dhaccount + "/fsst:" + tag
+        for container in client.containers.list():
+            for ttag in container.image.attrs["RepoTags"]:
+                if ttag == name:
+                    return container
     return None
 
 
@@ -1635,22 +1672,11 @@ def run_in_docker(tag, command, directory, daemonize, expose, api="apimap", debu
     """Run a given command in a new docker container"""
     # pylint: disable=too-many-locals, too-many-statements, too-many-branches, too-many-arguments
     print("COMMAND:", command)
-    match = None
-    lookfor = "pibara/fsst:" + tag
-    print("IMAGE:", lookfor)
     client = docker.from_env()
-    for image in client.images.list():
-        for repotag in image.attrs["RepoTags"]:
-            if repotag == lookfor:
-                match = image
-    if match is None:
-        print("NOTICE:", tag, "not found, trying to fetch from docker hubi, this may take a moment.")
-        try:
-            match = client.images.pull("pibara/fsst", tag=tag)
-            print("  - Fetched")
-        except requests.exceptions.HTTPError:
-            print("ERROR: ", lookfor, "docker image not found")
-            sys.exit(0)
+    imgmatch, _ = get_docker_image(client, tag)
+    if imgmatch is None:
+        print("ERROR: docker image not found")
+        sys.exit(0)
     workdir = os.path.join(os.getcwd(), directory)
     if not os.path.isdir(workdir):
         print("ERROR:", workdir, "isn't a valid directory path")
@@ -1677,7 +1703,7 @@ def run_in_docker(tag, command, directory, daemonize, expose, api="apimap", debu
     if debug:
         environment["AIOFLUREEDB_DEBUG"] = "TRUE"
     try:
-        container = client.containers.run(match, command, mounts=mounts, environment=environment,
+        container = client.containers.run(imgmatch, command, mounts=mounts, environment=environment,
                                           ports=ports, detach=True, auto_remove=True, name=name)
     except docker.errors.APIError as exp:
         print("ERROR: Problem starting docker container OR issue binding to 8090")
@@ -1832,53 +1858,51 @@ async def dockertest_main(directory, target, verboseerrors,
 
 async def dockerstart_main(tag):
     """Main function for the dockerstart subcommand"""
-    imagename = "pibara/fsst:" + tag
-    fluree_command = "/bin/bash /usr/src/fsst/fluree_start.sh  -Dfdb-api-port=8090"
-    ports = {}
-    if tag == "stable":
-        ports["8090/tcp"] = 8090
-    else:
-        ports["8090/tcp"] = 8090
     client = docker.from_env()
-    name = "fsst-dockerstart-" + tag
-    try:
-        client.containers.run(imagename, fluree_command, ports=ports,
-                              detach=True, auto_remove=True, name=name)
-        print("Started", imagename)
-    except docker.errors.NotFound:
-        print("ERROR:", imagename, "not found")
+    _, imagename = get_docker_image(client, tag)
+    if imagename is not None:
+        fluree_command = "/bin/bash /usr/src/fsst/fluree_start.sh  -Dfdb-api-port=8090"
+        ports = {}
+        if tag == "stable":
+            ports["8090/tcp"] = 8090
+        else:
+            ports["8090/tcp"] = 8090
+        client = docker.from_env()
+        name = "fsst-dockerstart-" + tag
+        try:
+            client.containers.run(imagename, fluree_command, ports=ports,
+                                  detach=True, auto_remove=True, name=name)
+            print("Started", imagename)
+        except docker.errors.NotFound:
+            print("ERROR:", imagename, "not found")
+    else:
+        print("ERROR: fsst", tag, "not found")
     return
 
 
 async def dockerstop_main(tag):
     """Main function for the dockerstop subcommand"""
-    lookfor = "pibara/fsst:" + tag
     client = docker.from_env()
     container = get_running_docker(client, tag)
     if container: # pylint: disable=consider-using-assignment-expr
         container.stop()
-        print("Stopping", lookfor)
+        print("Stopping fsst", tag)
     else:
-        print("ERROR: no running instance of", lookfor, "found")
+        print("ERROR: no running instance of fsst", tag, "found")
 
 
 async def versioncheck_main(tag):
     """Main function for the versioncheck subcommand"""
     # pylint: disable=too-many-branches
-    match = None
-    lookfor = "pibara/fsst:" + tag
     client = docker.from_env()
-    for image in client.images.list():
-        for repotag in image.attrs["RepoTags"]:
-            if repotag == lookfor:
-                match = image
-    if match is None:
-        print("ERROR: ", lookfor, "docker image not found")
+    imgmatch, _ = get_docker_image(client, tag)
+    if imgmatch is None:
+        print("ERROR: fsst", tag, "docker image not found")
         sys.exit(0)
     cmd = "fsst version"
     name = "fsst-versioncheck-" + tag
     try:
-        container = client.containers.run(match, cmd, detach=False, auto_remove=True, name=name)
+        container = client.containers.run(imgmatch, cmd, detach=False, auto_remove=True, name=name)
     except docker.errors.ContainerError:
         print("ERROR: Container Error.")
         print("       This might be the result of a 0.1.x version of the docker container")
@@ -1899,16 +1923,16 @@ async def versioncheck_main(tag):
     if dockerfsst[0] == localfsst[0]:
         if dockerfsst[1] == localfsst[1]:
             if dockerfsst[2] == localfsst[2]:
-                print("Perfect version match:", VERSION, "for image", lookfor)
+                print("Perfect version match:", VERSION, "for image fsst", tag)
             else:
                 print("Near version match:", VERSION, "local vs", dockerfsstversion,
-                      "in docker image", lookfor, ". Should be OK.")
+                      "in docker image fsst", tag, ". Should be OK.")
         else:
             print("NOTICE: Possible version mismatch:", VERSION, "local vs", dockerfsstversion,
-                  "in docker image", lookfor, "Use with care.")
+                  "in docker image fsst", tag, "Use with care.")
     else:
-        print("WARNING: Version mismatch:", VERSION, "local vs", parts[1], "in docker image",
-              lookfor)
+        print("WARNING: Version mismatch:", VERSION, "local vs", parts[1], "in docker image fsst",
+              tag)
         sys.exit(1)
     return
 
@@ -2504,5 +2528,5 @@ def _main():
     loop.run_until_complete(argparse_main())
 
 if __name__ == '__main__':
-    import requests
+    #import requests
     _main()

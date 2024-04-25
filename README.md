@@ -1,7 +1,7 @@
 ## Fluree Schema Scenario Tool
 
 This project contains a simple yet usefull tool for database schema development for FlureeDB.
-Note that there have been major updates to the commandline interface from the 0.1 version of this tool. Please upgrade both the tool and the accompanying [docker images](https://hub.docker.com/r/pibara/fsst/tags?page=1&ordering=last_updated) if you are currently using the 0.1 version.
+Note that there have been major updates to the commandline interface from the 0.1 version of this tool. Please upgrade both the tool and the accompanying [docker images](https://hub.docker.com/r/dlosatoes/fsst/tags?page=1&ordering=last_updated) if you are currently using the 0.1 version.
 
 From the 0.2 version of *fsst*, the command line has a number of sub commands.
 The following sub-commands run without docker and without a local FlureeDB server.
