@@ -4,6 +4,7 @@
 # pylint: disable=too-many-lines, unspecified-encoding, too-complex
 import os
 import os.path
+import datetime
 import re
 import copy
 import subprocess
@@ -16,7 +17,7 @@ import asyncio
 import itertools
 import importlib.util
 import requests
-VERSION = "0.8.12"
+VERSION = "0.8.13"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -1594,6 +1595,47 @@ async def fluree_main(notest, network, host, port, output, createkey,
         return False
 
 
+def find_newest_remote(tag):
+    """Find the newest image for a given tag from one of the three docker hub accounts"""
+    bestage = None
+    bestaccount = None
+    bestdigest = None
+    # pylint: disable=too-many-nested-blocks
+    for dhaccount in ("dlosatoes", "pibara", "fluree"):
+        uri = f"https://hub.docker.com/v2/repositories/{dhaccount}/fsst/tags"
+        try:
+            req = requests.get(uri, timeout=60.0)
+            repoinfo = req.json()
+            if "results" in repoinfo:
+                for candidate in repoinfo["results"]:
+                    if candidate["name"] == tag:
+                        updated = datetime.datetime.fromisoformat(candidate["last_updated"])
+                        now = datetime.datetime.now(updated.tzinfo)
+                        age = int((now - updated).total_seconds())
+                        digest = candidate["digest"]
+                        if bestage is None or age < bestage:
+                            bestage = age
+                            bestdigest = digest
+                            bestaccount = dhaccount
+        except requests.exceptions.HTTPError:
+            print("ERROR: http error while fetching info from docker hub on", dhaccount)
+    return bestaccount, bestdigest
+
+
+def get_local_docker_from_digest(client, tag, account, digest):
+    """Get local fsst docker image by tag and digest"""
+    lookfor = account + "/fsst:" + tag
+    print("INFO: Looking for", lookfor)
+    for image in client.images.list():
+        for repotag in image.attrs["RepoTags"]:
+            for repodigest in image.attrs["RepoDigests"]:
+                if repotag == lookfor and repodigest.split(":")[1] == digest.split(":")[1]:
+                    print("INFO: No need to fetch from docker hub, newest image available loccally")
+                    return image
+    print("NOTICE: Not locally found")
+    return None
+
+
 def get_local_docker_image(client, tag):
     """Get local fsst docker image by tag"""
     imgmatch = None
@@ -1608,27 +1650,41 @@ def get_local_docker_image(client, tag):
                         return imgmatch, lookfor
     return None, None
 
-def get_dockerhub_docker_image(client, tag):
+
+def get_dockerhub_docker_image_from_account(client, tag, dhaccount):
     """Find and download docker image from docker hub by tag"""
     imgmatch = None
-    for dhaccount in ("dlosatoes", "pibara", "fluree"):
-        lookfor = dhaccount + "/fsst:" + tag
-        lookfor2 = dhaccount + "/fsst"
-        try:
-            imgmatch = client.images.pull(lookfor2, tag=tag)
-            print("  - Fetched", lookfor, "from docker hub")
-            return imgmatch, lookfor
-        except requests.exceptions.HTTPError:
-            print("  -", lookfor, "not found on docker hub")
+    lookfor = dhaccount + "/fsst:" + tag
+    lookfor2 = dhaccount + "/fsst"
+    try:
+        imgmatch = client.images.pull(lookfor2, tag=tag)
+        print("  - Fetched", lookfor, "from docker hub")
+        return imgmatch, lookfor
+    except requests.exceptions.HTTPError:
+        print("  -", lookfor, "not found on docker hub")
     return None, None
+
 
 def get_docker_image(client, tag):
     """Try to find docker image by tag locally, if not found try to fetch it from docker hub"""
+    account, digest = find_newest_remote(tag)
+    if account is not None and digest is not None:
+        print("INFO: Newest image with tag", tag, "is from", account)
+        if (image := get_local_docker_from_digest(client, tag, account, digest)) is not None:
+            print("INFO: Found docker image locally")
+            return image, account + "/" + tag
+        print("NOTICE: Fetching docker image from docker hub")
+        image, matchname = get_dockerhub_docker_image_from_account(client, tag, account)
+        if image is not None:
+            print("INFO: Fetched docker image")
+            return image, matchname
+    print("WARNING: Tag not found on docker hub, falling back to local guess")
     imgmatch, imgname = get_local_docker_image(client, tag)
-    if imgmatch is None or imgname is None:
-        print("NOTICE: fsst", tag, "not found locally, looking on docker hub.")
-        imgmatch, imgname = get_dockerhub_docker_image(client, tag)
-    return imgmatch, imgname
+    if imgmatch is not None and imgname is not None:
+        return imgmatch, imgname
+    print("NOTICE: fsst", tag, "not found.")
+    return None, None
+
 
 def get_running_docker(client, tag):
     """Get the running docker"""
