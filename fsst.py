@@ -2096,11 +2096,15 @@ async def dockerparams_main(tag):
     if container is None: # pylint: disable=consider-using-assignment-expr
         print("ERROR, running container not found for tag =", tag)
         return
-    echo = container.exec_run("cat default-private-key.txt")
     createkey = None
     port = None
+    echo = container.exec_run("cat default-private-key.txt")
     if echo.exit_code == 0: # pylint: disable=compare-to-zero
         createkey = echo.output.decode()
+    else:
+        echo = container.exec_run("cat /var/lib/fluree/default-private-key.txt")
+        if echo.exit_code == 0: # pylint: disable=compare-to-zero
+            createkey = echo.output.decode()
     if ("HostConfig" in container.attrs and
             "PortBindings" in container.attrs["HostConfig"] and
             "8090/tcp" in container.attrs["HostConfig"]["PortBindings"] and
