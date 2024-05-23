@@ -17,7 +17,7 @@ import asyncio
 import itertools
 import importlib.util
 import requests
-VERSION = "0.8.13"
+VERSION = "0.8.14"
 CRYPTO_OK = True
 DOCKER_OK = True
 try:
@@ -1672,7 +1672,7 @@ def get_docker_image(client, tag):
         print("INFO: Newest image with tag", tag, "is from", account)
         if (image := get_local_docker_from_digest(client, tag, account, digest)) is not None:
             print("INFO: Found docker image locally")
-            return image, account + "/" + tag
+            return image, account + "/fsst:" + tag
         print("NOTICE: Fetching docker image from docker hub")
         image, matchname = get_dockerhub_docker_image_from_account(client, tag, account)
         if image is not None:
@@ -1927,7 +1927,7 @@ async def dockerstart_main(tag):
         name = "fsst-dockerstart-" + tag
         try:
             client.containers.run(imagename, fluree_command, ports=ports,
-                                  detach=True, auto_remove=True, name=name)
+                              detach=True, auto_remove=True, name=name)
             print("Started", imagename)
         except docker.errors.NotFound:
             print("ERROR:", imagename, "not found")
